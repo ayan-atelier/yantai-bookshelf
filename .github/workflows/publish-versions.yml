@@ -1,0 +1,20 @@
+name: Prepare bookshelf versions
+on:
+  push:
+    branches: [main]
+    paths: [versions.json, 'releases/**', '.github/workflows/publish-versions.yml', '.github/scripts/publish_versions.py']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: bookshelf-version-branches
+  cancel-in-progress: false
+jobs:
+  freeze-releases:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Validate packages and create immutable version branches
+        run: python3 .github/scripts/publish_versions.py
