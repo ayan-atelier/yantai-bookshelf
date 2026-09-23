@@ -1,0 +1,16 @@
+{
+  "display_name": "砚台 · 角色书架",
+  "loading_order": 90,
+  "requires": [],
+  "optional": [],
+  "js": "index.js",
+  "css": "style.css",
+  "author": "阿砚 · Codex",
+  "version": "1.4.1",
+  "minimum_client_version": "1.16.0",
+  "auto_update": false,
+  "hooks": {
+    "enable": "onEnable",
+    "disable": "onDisable"
+  }
+}
