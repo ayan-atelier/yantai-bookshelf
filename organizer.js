@@ -21,22 +21,6 @@ export function foldersFor(settings) {
         seen.add(folder.id); return true;
     });
 }
-// A small account setting, shared by the homepage and popup. Searches are temporary.
-export function shelfView(settings, value = settings.viewState) {
-    value = value && typeof value === 'object' ? value : {};
-    const valid = value.scope === 'all' || value.scope === 'unfiled' || foldersFor(settings).some(f => f.id === value.scope);
-    return {
-        scope: valid ? value.scope : 'all',
-        filter: value.filter === 'favorites' ? 'favorites' : 'all',
-        page: valid && Number.isSafeInteger(value.page) && value.page >= 0 ? value.page : 0,
-    };
-}
-export function rememberShelfView(settings, value) {
-    const next = shelfView(settings, value), old = settings.viewState;
-    if (old && next.scope === old.scope && next.filter === old.filter && next.page === old.page) return false;
-    settings.viewState = next;
-    return true;
-}
 export function folderOf(entity, settings, ids = new Set(foldersFor(settings).map(f => f.id))) {
     const id = organization(settings).assignments[entity.key];
     return !entity.assistant && ids.has(id) ? id : '';
@@ -86,7 +70,7 @@ export function attachOrganizer({ shell, settings, save, redraw, element, button
     const toggle = button('全部 ▾', 'jd-tab jd-folder-toggle', () => menu.hidden ? open() : close(true), '筛选文件夹，也可将角色卡拖到这里');
     toggle.setAttribute('aria-expanded', 'false');
     control.append(toggle, menu);
-    shell.scope ??= 'all'; shell.selected = new Set(); shell.organizing = false;
+    shell.scope = 'all'; shell.selected = new Set(); shell.organizing = false;
     let dragKeys = [], disposed = false;
     const holds = new Set();
     const outside = event => { if (!control.contains(event.target)) close(); };
@@ -161,7 +145,7 @@ export function attachOrganizer({ shell, settings, save, redraw, element, button
         menu.replaceChildren();
         for (const folder of [{ id: 'all', name: '全部' }, { id: 'unfiled', name: '未分类' }, ...foldersFor(settings())]) {
             const option = button(folder.name, 'jd-folder-option', () => {
-                shell.scope = folder.id; shell.page = 0; close(true); shell.draw(); shell.remember();
+                shell.scope = folder.id; shell.page = 0; close(true); shell.draw();
             });
             option.dataset.folder = folder.id; option.setAttribute('aria-pressed', String(folder.id === shell.scope));
             if (folder.id !== 'all') addDrop(option, folder.id === 'unfiled' ? '' : folder.id);
@@ -203,9 +187,7 @@ export function attachOrganizer({ shell, settings, save, redraw, element, button
     function sync() {
         for (const key of shell.selected) if (!shell.entities.has(key) || shell.entities.get(key).assistant) shell.selected.delete(key);
         const folders = foldersFor(settings());
-        if (shell.scope !== 'all' && shell.scope !== 'unfiled' && !folders.some(f => f.id === shell.scope)) {
-            shell.scope = 'all'; shell.page = 0; shell.remember();
-        }
+        if (shell.scope !== 'all' && shell.scope !== 'unfiled' && !folders.some(f => f.id === shell.scope)) shell.scope = 'unfiled';
         const name = shell.scope === 'all' ? '全部' : shell.scope === 'unfiled' ? '未分类' : folders.find(f => f.id === shell.scope).name;
         toggle.textContent = name + ' ▾'; toggle.title = name + ' · 筛选文件夹，也可拖入卡片';
         bar.hidden = !shell.organizing; organize.textContent = shell.organizing ? '退出整理' : '整理';

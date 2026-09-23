@@ -187,12 +187,3 @@ body.jd-bookshelf-home-active #chat.jd-bookshelf-home>.mes:is([type="welcome"],[
 .jd-page-size:focus-visible{outline:2px solid var(--shelf-ink);outline-offset:2px;}
 .jd-move-list{display:flex;flex-direction:column;gap:4px;}
 @media(max-width:650px){.jd-folder-toggle{max-width:100px!important;}.jd-pager{gap:4px 12px;}.jd-organizer-bar{gap:4px 12px;}.jd-shelf-info>.jd-text-button{min-height:36px;}}
-
-/* Version management stays in a compact, theme-following settings dialog. */
-.jd-version-actions{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0;}
-.jd-version-actions button{flex:1 1 140px;min-width:0;}
-.jd-version-source{display:grid;gap:8px;margin-bottom:14px;}
-.jd-version-source input{width:100%;min-width:0;}
-.jd-version-notes{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;}
-.jd-version-help{display:block;color:var(--shelf-muted);font-size:12px;}
-#jd-bookshelf-settings .jd-version-open{margin-top:10px;}

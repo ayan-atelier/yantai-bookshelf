@@ -1,10 +1,7 @@
 import { MODULE, DEFAULT_CROP, fileStem, aliasKey, bounded, timestamp, normalizeRows, mergeDetails, displayChatName, entitiesFromContext, isFavorite, isPinned, filterEntities, SORT_OPTIONS, normalizeSort, createArchiveCache, switchNativeChat, createNativeChat, deleteNativeChat, selectedEntityMatches } from './core.js';
-import { pageSize, pageWindow, filterFolder, attachOrganizer, shelfView, rememberShelfView } from './organizer.js';
-import { BOOKSHELF_VERSION, createVersionManager } from './versions.js';
-import { openVersionDialog } from './version-ui.js';
+import { pageSize, pageWindow, filterFolder, attachOrganizer } from './organizer.js';
 
 const appRoot = new URL('../../../../', import.meta.url);
-const nativeModuleURL = import.meta.url;
 const ctx = () => globalThis.SillyTavern.getContext();
 const url = path => new URL(path, appRoot).href;
 const shells = new Set();
@@ -31,7 +28,6 @@ let characterIndex;
 let characterSource;
 let characterLength = -1;
 let characterRevision = -1;
-let versionManager;
 
 function settings() {
     const store = ctx().extensionSettings;
@@ -78,38 +74,6 @@ function report(message) {
 const loadWelcome = () => welcomeModule ||= import(new URL('scripts/welcome-screen.js', appRoot).href);
 const loadCore = () => coreModule ||= import(new URL('script.js', appRoot).href);
 const loadGroups = () => groupModule ||= import(new URL('scripts/group-chats.js', appRoot).href);
-
-async function saveConfirmedSettings() {
-    const api = await loadCore(), context = ctx(), types = context.eventTypes || context.event_types;
-    if (!api.saveSettings || !types.SETTINGS_UPDATED) throw new Error('当前酒馆无法确认设置已保存，请先更新酒馆。');
-    let acknowledged = false;
-    const confirmed = () => { acknowledged = true; };
-    context.eventSource.on(types.SETTINGS_UPDATED, confirmed);
-    try {
-        await api.saveSettings();
-        if (!acknowledged) throw new Error('书架设置尚未保存成功，已停止操作。请检查酒馆连接。');
-    } finally {
-        context.eventSource.removeListener ? context.eventSource.removeListener(types.SETTINGS_UPDATED, confirmed) : context.eventSource.off(types.SETTINGS_UPDATED, confirmed);
-    }
-}
-async function prepareVersionChange() {
-    const [api, groups] = await Promise.all([loadCore(), loadGroups()]);
-    if (opening || api.is_send_press || api.isChatSaving || groups.is_group_generating) throw new Error('酒馆正在生成、打开或保存聊天，请结束后再切换版本。');
-    if (hasSelection() && ctx().chat?.length) {
-        if (!ctx().saveChat) throw new Error('请先返回酒馆首页，再切换版本。');
-        await ctx().saveChat();
-    }
-}
-function showVersionManager() {
-    versionManager ||= createVersionManager({
-        settings, save, flush: saveConfirmedSettings, context: ctx, apiRoot: appRoot,
-        moduleURL: nativeModuleURL,
-        helperId: globalThis[Symbol.for('jingdu.bookshelf.helper.runtime')]?.scriptId,
-        beforeChange: prepareVersionChange,
-    });
-    openVersionDialog({ manager: versionManager, element, button, dialog, currentVersion: BOOKSHELF_VERSION,
-        notify: report, refresh: async () => { await prepareVersionChange(); await saveConfirmedSettings(); location.reload(); } });
-}
 
 function assistantAvatar() {
     const chosen = ctx().accountStorage?.getItem('assistant');
@@ -559,7 +523,6 @@ function createShelf(isHome = false) {
             if (normalizeSort(settings().sort) === value) return;
             settings().sort = value; save();
             for (const view of shells) { view.page = 0; view.draw(); }
-            shell.remember();
         });
         const mark = element('span', 'jd-sort-mark', '✓'); mark.setAttribute('aria-hidden', 'true');
         option.append(element('span', '', label), mark); option.dataset.sort = value;
@@ -589,21 +552,17 @@ function createShelf(isHome = false) {
     const notice = element('p', 'jd-shelf-notice'); notice.setAttribute('role', 'status');
     const grid = element('div', 'jd-story-grid');
     const pager = element('nav', 'jd-pager'); pager.setAttribute('aria-label', '书架分页');
-    const shell = { root, grid, notice, ...shelfView(settings()), query: '', sortRun: 0,
+    const shell = { root, grid, notice, filter: 'all', query: '', page: 0, sortRun: 0,
         entities: new Map(), visible: new Map(), countTargets: new Set(), visibility: null, dispose: null, draw: null };
-    shell.remember = () => {
-        shell.viewTouched = true;
-        if (rememberShelfView(settings(), { scope: shell.scope, filter: shell.filter, page: shell.query ? 0 : shell.page })) save();
-    };
     shell.organizer = attachOrganizer({ shell, settings, save, element, button, dialog,
         redraw: () => { for (const view of shells) view.draw(); } });
     tabs.append(shell.organizer.control);
-    const favoriteTab = button('收藏', 'jd-tab', () => { shell.filter = shell.filter === 'favorites' ? 'all' : 'favorites'; shell.page = 0; shell.draw(); shell.remember(); });
+    const favoriteTab = button('收藏', 'jd-tab', () => { shell.filter = shell.filter === 'favorites' ? 'all' : 'favorites'; shell.page = 0; shell.draw(); });
     favoriteTab.dataset.filter = 'favorites'; tabs.append(favoriteTab);
     info.append(tally, sortStatus, shell.organizer.organize, refresh);
     const pageLabel = element('span', 'jd-page-label'); pageLabel.setAttribute('aria-live', 'polite');
     const turnPage = delta => {
-        shell.page += delta; shell.draw(); if (!shell.query) shell.remember();
+        shell.page += delta; shell.draw();
         root.scrollIntoView({ block: 'start', behavior: 'instant' });
     };
     const previous = button('上一页', 'jd-text-button', () => turnPage(-1));
@@ -615,7 +574,6 @@ function createShelf(isHome = false) {
     size.addEventListener('change', () => {
         settings().pageSize = pageSize(size.value); save();
         for (const view of shells) { view.page = 0; view.draw(); }
-        shell.remember();
     });
     sizeLabel.append(size); pager.append(previous, pageLabel, next, sizeLabel);
     root.append(toolbar, info, shell.organizer.bar, notice, grid, pager);
@@ -676,12 +634,7 @@ function createShelf(isHome = false) {
     let searchTimer;
     const scheduleSearch = () => {
         clearTimeout(searchTimer);
-        searchTimer = setTimeout(() => {
-            shell.query = search.value;
-            const saved = shelfView(settings());
-            shell.page = !shell.query && saved.scope === shell.scope && saved.filter === shell.filter ? saved.page : 0;
-            shell.draw();
-        }, 100);
+        searchTimer = setTimeout(() => { shell.query = search.value; shell.page = 0; shell.draw(); }, 100);
     };
     search.addEventListener('input', event => { if (!event.isComposing) scheduleSearch(); });
     search.addEventListener('compositionend', scheduleSearch);
@@ -764,12 +717,11 @@ function installControls() {
             if (['Enter', ' '].includes(event.key)) { event.preventDefault(); event.stopPropagation(); header.click(); }
         });
         const content = element('div', 'inline-drawer-content'); content.id = 'jd-bookshelf-settings-content';
-        content.append(element('small', 'jd-install-status', `已加载 · V${BOOKSHELF_VERSION} · 配色跟随当前酒馆主题`));
+        content.append(element('small', 'jd-install-status', '已加载 · V1.4.0 · 配色跟随当前酒馆主题'));
         const label = element('label', 'checkbox_label'); const check = element('input'); check.type = 'checkbox'; check.checked = settings().enabled;
         check.addEventListener('change', () => { settings().enabled = check.checked; dismissedHome = false; save(); scheduleHome(); });
         label.append(check, element('span', '', '首页显示角色书架'));
         content.append(label, button('打开书架', 'menu_button', openShelf), element('small', '', '封面右上角：图钉置顶、星号收藏、裁切调整封面。置顶按点击先后排列，其余可切换排序；点封面进入存档列表，右上角可新建聊天。'));
-        content.append(button('版本与更新', 'menu_button jd-version-open', showVersionManager));
         drawer.append(header, content); panel.append(drawer); host.append(panel);
     }
 }
@@ -779,10 +731,7 @@ export function onEnable() {
     const context = ctx(); const types = context.eventTypes || context.event_types;
     const subscribe = (type, fn) => { if (type) { context.eventSource.on(type, fn); listeners.push([type, fn]); } };
     const ready = () => { installControls(); if (!observer && document.getElementById('chat')) { observer = new MutationObserver(scheduleHome); observer.observe(document.getElementById('chat'), { childList: true }); } scheduleHome(); };
-    subscribe(types.APP_READY, () => {
-        ready();
-        for (const shell of shells) if (!shell.viewTouched) { Object.assign(shell, shelfView(settings())); shell.draw(); }
-    });
+    subscribe(types.APP_READY, ready);
     subscribe(types.CHAT_CHANGED, () => { dismissedHome = false; invalidateArchiveData(); document.querySelectorAll('.jd-shelf-dialog[open]').forEach(d => d.close()); scheduleHome(); });
     for (const type of [types.CHARACTER_EDITED, types.CHARACTER_DELETED, types.CHARACTER_DUPLICATED, types.CHARACTERS_IMPORTED, types.CHAT_DELETED, types.GROUP_CHAT_DELETED, types.CHAT_RENAMED, types.CHAT_CREATED]) subscribe(type, () => {
         invalidateArchiveData(); for (const shell of shells) shell.draw(); scheduleHome();
@@ -792,7 +741,6 @@ export function onEnable() {
 }
 export function onDisable() {
     enabledRuntime = false;
-    versionManager?.dispose(); versionManager = null;
     for (const request of requests) request.abort(); requests.clear();
     invalidateArchiveData();
     const source = ctx().eventSource;
