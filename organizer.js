@@ -102,6 +102,7 @@ export function attachOrganizer({ shell, settings, save, redraw, element, button
     }
     control.addEventListener('keydown', event => {
         if (event.key === 'Escape' && !menu.hidden) { event.preventDefault(); event.stopPropagation(); close(true); }
+        if (event.key === 'Tab' && !menu.hidden) { close(true); return; }
         if (event.target === toggle && event.key === 'ArrowDown') { event.preventDefault(); open(); }
         if (!menu.hidden && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) && event.target !== toggle) {
             event.preventDefault(); const options = [...menu.querySelectorAll('button')]; const current = options.indexOf(document.activeElement);
@@ -109,7 +110,12 @@ export function attachOrganizer({ shell, settings, save, redraw, element, button
             options[next]?.focus({ preventScroll: true });
         }
     });
-    control.addEventListener('focusout', event => { if (!control.contains(event.relatedTarget) && !dragKeys.length) close(); });
+    // WebKit can blur an option before tapping another, with no relatedTarget.
+    // That is not evidence of leaving the menu: let the ensuing click complete.
+    // Outside pointerdown and keyboard Tab/Escape still dismiss it explicitly.
+    control.addEventListener('focusout', event => {
+        if (event.relatedTarget && !control.contains(event.relatedTarget) && !dragKeys.length) close();
+    });
     toggle.addEventListener('dragenter', () => { if (dragKeys.length && menu.hidden) open(false); });
     toggle.addEventListener('dragover', event => { if (dragKeys.length) event.preventDefault(); });
     function commitMove(keys, target) {
@@ -172,6 +178,8 @@ export function attachOrganizer({ shell, settings, save, redraw, element, button
         const current = foldersFor(settings()).find(f => f.id === shell.scope);
         if (current) actions.append(button('重命名文件夹', 'jd-folder-option', () => editFolder(current)), button('删除文件夹', 'jd-folder-option', () => deleteFolder(current)));
         menu.append(actions);
+        // Match the sort menu's explicit focusability, including action buttons.
+        for (const option of menu.querySelectorAll('button')) option.tabIndex = -1;
     }
     function moveDialog() {
         const keys = [...shell.selected];

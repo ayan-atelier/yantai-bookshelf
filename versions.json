@@ -1,8 +1,17 @@
 {
   "schema": 1,
   "extension": "jingdu-bookshelf",
-  "latest": "1.4.1",
+  "latest": "1.4.2",
   "releases": [
+    {
+      "version": "1.4.2",
+      "branch": "v1.4.2",
+      "settings_schema": 1,
+      "minimum_client_version": "1.16.0",
+      "helper": "releases/yantai-bookshelf-v1.4.2-helper.json",
+      "sha256": "72099baafe92152cbf9f1aa7ee3bb5018d10e93c6040d51729cddf9e31db1bee",
+      "notes": "修复苹果端分类菜单无法切换与新建的问题；解除书架对主题毛玻璃效果的强制禁用。"
+    },
     {
       "version": "1.4.1",
       "branch": "v1.4.1",

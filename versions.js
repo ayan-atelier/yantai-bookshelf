@@ -1,5 +1,5 @@
 /* Explicit, user-triggered release switching. No startup polling or automatic installs. */
-export const BOOKSHELF_VERSION = '1.4.1';
+export const BOOKSHELF_VERSION = '1.4.2';
 export const BOOKSHELF_ID = 'jingdu-bookshelf';
 export const BOOKSHELF_SCRIPT_ID = 'dfe86938-8c9f-461a-b382-75b047b26ff2';
 export const SETTINGS_SCHEMA = 1;

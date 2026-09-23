@@ -1,4 +1,5 @@
 /* Static, scoped UI. Uses the active theme's colors and font.
+   Backdrop blur is left to the theme; do not force it off or add per-card blur.
    Underline/accent colors are decorative; readable controls use body ink. */
 .jd-bookshelf,.jd-shelf-dialog{
   --shelf-ink:var(--SmartThemeBodyColor,#ece8df);
@@ -62,7 +63,7 @@ body.jd-bookshelf-home-active #chat.jd-bookshelf-home>.mes:is([type="welcome"],[
 .jd-shelf-notice{margin:0;color:var(--shelf-ink);font-size:13px;line-height:1.7;}
 .jd-shelf-notice:not(:empty){margin:12px 0;}
 .jd-story-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px 17px;align-items:start;}
-.jd-story-card{position:relative;min-width:0;border:1px solid var(--shelf-soft-line,var(--shelf-line));border-radius:5px;background:var(--shelf-panel);overflow:hidden;box-shadow:none!important;backdrop-filter:none!important;}
+.jd-story-card{position:relative;min-width:0;border:1px solid var(--shelf-soft-line,var(--shelf-line));border-radius:5px;background:var(--shelf-panel);overflow:hidden;box-shadow:none!important;}
 .jd-story-card:focus-within,.jd-story-card:hover{border-color:var(--shelf-accent);}
 .jd-bookshelf .jd-open-card{display:block;width:100%;margin:0;padding:0;border:0;background:none;text-align:left;overflow:hidden;}
 .jd-cover{position:relative;display:block;width:100%;aspect-ratio:3/4;overflow:hidden;background:var(--shelf-inset);border-bottom:1px solid var(--shelf-soft-line,var(--shelf-line));}
@@ -83,8 +84,8 @@ body.jd-bookshelf-home-active #chat.jd-bookshelf-home>.mes:is([type="welcome"],[
 .jd-last-played{font-size:11px;line-height:1.5;color:var(--shelf-muted);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .jd-card-action{flex-shrink:0;font-size:11px;line-height:1.5;color:var(--shelf-muted);}
 .jd-empty{grid-column:1/-1;padding:45px 10px;color:var(--shelf-muted);text-align:center;font-size:14px;}
-.jd-shelf-dialog{width:min(620px,calc(100vw - 24px));max-width:calc(100vw - 24px);max-height:calc(100dvh - 32px);padding:0;margin:auto;border:1px solid var(--shelf-line);border-top:2px solid var(--shelf-accent);border-radius:5px;background:var(--shelf-panel);box-shadow:none!important;backdrop-filter:none!important;overflow:auto;scrollbar-width:thin;}
-.jd-shelf-dialog::backdrop{background:rgba(0,0,0,.65);backdrop-filter:none!important;}
+.jd-shelf-dialog{width:min(620px,calc(100vw - 24px));max-width:calc(100vw - 24px);max-height:calc(100dvh - 32px);padding:0;margin:auto;border:1px solid var(--shelf-line);border-top:2px solid var(--shelf-accent);border-radius:5px;background:var(--shelf-panel);box-shadow:none!important;overflow:auto;scrollbar-width:thin;}
+.jd-shelf-dialog::backdrop{background:rgba(0,0,0,.65);}
 .jd-shelf-dialog.jd-shelf-wide{width:min(1180px,calc(100vw - 24px));}
 .jd-dialog-head{position:sticky;top:0;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:16px 20px;background:var(--shelf-panel);border-bottom:1px solid var(--shelf-line);}
 .jd-dialog-head h2{margin:0!important;font:400 22px/1.4 var(--shelf-font)!important;color:var(--shelf-ink);}

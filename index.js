@@ -579,7 +579,9 @@ function createShelf(isHome = false) {
         const next = event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1 : (current + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
         options[next].focus({ preventScroll: true });
     });
-    sortControl.addEventListener('focusout', event => { if (!sortControl.contains(event.relatedTarget)) closeSort(); });
+    sortControl.addEventListener('focusout', event => {
+        if (event.relatedTarget && !sortControl.contains(event.relatedTarget)) closeSort();
+    });
     sortControl.append(sort, sortMenu); navigation.append(tabs, sortControl); toolbar.append(navigation);
     if (isHome) toolbar.append(button('原版首页', 'jd-tab jd-native-home', () => { dismissedHome = true; reconcileHome(); }));
     toolbar.append(search);
