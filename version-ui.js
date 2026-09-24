@@ -32,6 +32,7 @@ export function openVersionDialog({ manager, element, button, dialog, currentVer
     actions.append(check, update, rollback, reload); body.append(actions, details);
     body.append(element('small', 'jd-version-help', '只在你点击时检查或切换版本。回退后停留在旧版；角色卡和聊天存档保持原样。'));
     function sync() {
+        actions.setAttribute('aria-busy', String(manager.busy));
         for (const input of inputs) input.disabled = manager.busy || manager.reloadNeeded;
         check.disabled = manager.busy || manager.reloadNeeded;
         update.disabled = manager.busy || manager.reloadNeeded || !checked?.latest;

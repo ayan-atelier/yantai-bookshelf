@@ -23,10 +23,11 @@
   font-family:inherit;cursor:pointer;appearance:none;color:inherit;letter-spacing:inherit;
   text-transform:none;text-shadow:none;box-shadow:none;filter:none;transition:none;
 }
-.jd-bookshelf button:disabled,.jd-shelf-dialog button:disabled{cursor:wait;opacity:.58;}
+.jd-bookshelf button:disabled,.jd-shelf-dialog button:disabled{cursor:not-allowed;opacity:.58;}
+.jd-shelf-dialog .jd-version-actions[aria-busy=true] button:disabled{cursor:wait;}
 .jd-bookshelf :is(button,input):focus-visible,.jd-shelf-dialog :is(button,input):focus-visible{outline:2px solid var(--shelf-ink);outline-offset:3px;}
-.jd-bookshelf{width:100%;min-width:0;max-width:1420px;margin:0 auto;padding:16px 20px 28px;container-type:inline-size;}
-#chat.jd-bookshelf-home{padding:0!important;overflow-y:auto;}
+.jd-bookshelf{width:100%;min-width:0;max-width:1420px;margin:0 auto;padding:calc(16px + var(--jd-home-inset-top,0px)) 20px calc(28px + var(--jd-home-inset-bottom,0px));container-type:inline-size;}
+#chat.jd-bookshelf-home{padding:0!important;overflow-y:auto;scroll-padding-top:calc(12px + var(--jd-home-inset-top,0px));scroll-padding-bottom:calc(12px + var(--jd-home-inset-bottom,0px));}
 #chat.jd-bookshelf-home>.jd-bookshelf{flex:0 0 auto;}
 /* Replace only native welcome content, not arbitrary children / popup hosts.
    Keep the native composer and extension entry points available. */
@@ -139,7 +140,7 @@ body.jd-bookshelf-home-active #chat.jd-bookshelf-home>.mes:is([type="welcome"],[
   .jd-card-tools .jd-icon-button svg{width:15px;height:15px;}
   .jd-card-tools .jd-icon-button::after{content:"";position:absolute;inset:-2px;}
   .jd-save-preview{-webkit-line-clamp:4;line-clamp:4;max-height:6.8em;}
-  .jd-bookshelf{padding:12px 12px 24px;}
+  .jd-bookshelf{padding:calc(12px + var(--jd-home-inset-top,0px)) 12px calc(24px + var(--jd-home-inset-bottom,0px));}
   .jd-story-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:15px 12px;}
   .jd-dialog-head{padding:13px 15px;}
   .jd-dialog-body{padding:16px 14px 20px;}

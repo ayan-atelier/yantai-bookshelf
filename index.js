@@ -2,6 +2,7 @@ import { MODULE, DEFAULT_CROP, fileStem, aliasKey, bounded, timestamp, normalize
 import { pageSize, pageWindow, filterFolder, attachOrganizer, shelfView, rememberShelfView } from './organizer.js';
 import { BOOKSHELF_VERSION, createVersionManager } from './versions.js';
 import { openVersionDialog } from './version-ui.js';
+import { attachHomeLayout } from './layout.js';
 
 const appRoot = new URL('../../../../', import.meta.url);
 const nativeModuleURL = import.meta.url;
@@ -606,7 +607,8 @@ function createShelf(isHome = false) {
     const pageLabel = element('span', 'jd-page-label'); pageLabel.setAttribute('aria-live', 'polite');
     const turnPage = delta => {
         shell.page += delta; shell.draw(); if (!shell.query) shell.remember();
-        root.scrollIntoView({ block: 'start', behavior: 'instant' });
+        if (isHome) document.getElementById('chat').scrollTop = 0;
+        else root.scrollIntoView({ block: 'start', behavior: 'instant' });
     };
     const previous = button('上一页', 'jd-text-button', () => turnPage(-1));
     const next = button('下一页', 'jd-text-button', () => turnPage(1));
@@ -687,7 +689,7 @@ function createShelf(isHome = false) {
     };
     search.addEventListener('input', event => { if (!event.isComposing) scheduleSearch(); });
     search.addEventListener('compositionend', scheduleSearch);
-    shell.dispose = () => { closeSort(); clearTimeout(searchTimer); shell.sortRun++; shell.organizer.dispose(); shell.visibility?.disconnect(); shell.visible.clear(); shell.countTargets.clear(); shells.delete(shell); };
+    shell.dispose = () => { shell.layout?.dispose(); closeSort(); clearTimeout(searchTimer); shell.sortRun++; shell.organizer.dispose(); shell.visibility?.disconnect(); shell.visible.clear(); shell.countTargets.clear(); shells.delete(shell); };
     shells.add(shell); shell.draw(); return shell;
 }
 
@@ -722,6 +724,8 @@ function reconcileHome() {
     if (rootHome?.root.isConnected) return;
     unmountHome(); rootHome = createShelf(true); chat.prepend(rootHome.root);
     chat.classList.add('jd-bookshelf-home'); document.body.classList.add('jd-bookshelf-home-active');
+    rootHome.layout = attachHomeLayout(chat, rootHome.root);
+    chat.scrollTop = 0;
 }
 function scheduleHome() { if (frame || !enabledRuntime) return; frame = requestAnimationFrame(() => { frame = null; reconcileHome(); }); }
 

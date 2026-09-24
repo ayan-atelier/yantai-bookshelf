@@ -6,7 +6,7 @@
   "js": "index.js",
   "css": "style.css",
   "author": "阿砚 · Codex",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "minimum_client_version": "1.16.0",
   "auto_update": false,
   "hooks": {

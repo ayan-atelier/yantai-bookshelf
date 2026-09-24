@@ -1,8 +1,17 @@
 {
   "schema": 1,
   "extension": "jingdu-bookshelf",
-  "latest": "1.4.2",
+  "latest": "1.4.3",
   "releases": [
+    {
+      "version": "1.4.3",
+      "branch": "v1.4.3",
+      "settings_schema": 1,
+      "minimum_client_version": "1.16.0",
+      "helper": "releases/yantai-bookshelf-v1.4.3-helper.json",
+      "sha256": "b75d52da8e09bcd3869e64be2d27a0be023ff918d6b8183e2919621ef556f21d",
+      "notes": "新增首页浮动工具栏与输入栏自动避让，防止分类和分页被挡；修复更新按钮禁用时鼠标仍显示等待光标的问题。"
+    },
     {
       "version": "1.4.2",
       "branch": "v1.4.2",
