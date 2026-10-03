@@ -220,7 +220,7 @@ function dateLabel(value, relative = true) {
     return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', ...(relative ? {} : { hour: '2-digit', minute: '2-digit' }) }).format(date);
 }
 function imageSource(entity) {
-    if (entity.kind === 'char') return url(`characters/${encodeURIComponent(entity.id)}`);
+    if (entity.kind === 'char') return entity.id && entity.id !== 'none' ? url(`characters/${encodeURIComponent(entity.id)}`) : '';
     if (entity.kind === 'group' && typeof entity.avatar === 'string' && entity.avatar !== 'none') {
         try { const parsed = new URL(entity.avatar, appRoot); if (['http:', 'https:'].includes(parsed.protocol) || entity.avatar.startsWith('data:image/')) return parsed.href; } catch {}
     }
@@ -236,7 +236,11 @@ function cover(entity, className = 'jd-cover') {
     fallback.setAttribute('aria-hidden', 'true'); box.append(fallback);
     const src = imageSource(entity);
     if (src) {
-        const img = element('img'); img.alt = ''; img.src = src;
+        const img = element('img'); img.alt = '';
+        // Character images are served from the same filename after an avatar
+        // replacement. The revision query prevents the old bitmap lingering
+        // in the browser cache after a successful upload.
+        img.src = entity.kind === 'char' ? `${src}${src.includes('?') ? '&' : '?'}yantai=${cardsRevision}` : src;
         img.loading = 'lazy'; img.decoding = 'async'; img.style.objectPosition = cropFor(entity);
         img.addEventListener('error', () => img.remove(), { once: true }); box.append(img);
     }
@@ -266,7 +270,7 @@ function dialog(title, wide = false) {
 
 function setBusy(value) {
     opening = value;
-    document.querySelectorAll('.jd-open-card,.jd-open-chat,.jd-open-native,.jd-new-chat,.jd-delete-chat,.jd-edit-alias,#jd-bookshelf-settings button').forEach(el => { el.disabled = value; });
+    document.querySelectorAll('.jd-open-card,.jd-open-chat,.jd-open-native,.jd-new-chat,.jd-delete-chat,.jd-edit-alias,.jd-add-character,.jd-delete-character,.jd-replace-avatar,#jd-bookshelf-settings button').forEach(el => { el.disabled = value; });
     document.getElementById('jd-bookshelf-open')?.setAttribute('aria-disabled', String(value));
 }
 async function safeAction(action) {
@@ -399,6 +403,11 @@ function showArchives(entity, cached) {
             if (typeof api.displayPastChats === 'function') await api.displayPastChats();
         });
     }));
+    if (entity.kind === 'char') {
+        const remove = button('', 'jd-icon-button jd-delete-character', () => deleteCharacterFromShelf(entity, modal), `删除角色卡「${entity.name}」`);
+        const icon = element('i', 'fa-solid fa-trash-can'); icon.setAttribute('aria-hidden', 'true');
+        remove.append(icon); remove.disabled = opening; foot.append(remove);
+    }
     body.append(foot); draw(); void load();
 }
 
@@ -458,6 +467,43 @@ function confirmDelete(entity, row, archive, current) {
     const actions = element('div', 'jd-delete-actions'); actions.append(cancel, commit); body.append(actions); cancel.focus();
 }
 
+async function deleteCharacterFromShelf(entity, archive) {
+    if (opening || entity.kind !== 'char' || !archive?.open) return;
+    let api, popupModule, templateModule;
+    try {
+        [api, popupModule, templateModule] = await Promise.all([
+            loadCore(),
+            import(new URL('scripts/popup.js', appRoot).href),
+            import(new URL('scripts/templates.js', appRoot).href),
+        ]);
+    } catch {
+        report('当前酒馆没有找到原生角色删除弹窗，请从酒馆角色管理中删除。');
+        return;
+    }
+    if (typeof api.deleteCharacter !== 'function' || !popupModule.Popup?.show?.confirm) {
+        report('当前酒馆没有找到原生角色删除接口，请从酒馆角色管理中删除。');
+        return;
+    }
+    let deleteChats = false;
+    const confirmed = await popupModule.Popup.show.confirm('删除角色？', await templateModule.renderTemplateAsync('deleteConfirm'), {
+        onClose: () => { deleteChats = !!document.querySelector('#del_char_checkbox')?.checked; },
+    });
+    if (!confirmed) return;
+    setBusy(true);
+    try {
+        const deleted = await api.deleteCharacter(entity.id, { deleteChats });
+        if (!deleted) throw new Error('角色卡未删除，可能有正在保存的聊天。');
+        invalidateArchiveData();
+        for (const shell of shells) shell.draw();
+        archive.close();
+        globalThis.toastr?.success('已删除角色卡。', '砚台 · 角色书架');
+    } catch (error) {
+        report(error.message || '角色卡删除失败，请刷新后重试。');
+    } finally {
+        setBusy(false);
+    }
+}
+
 function editAlias(entity, row, refresh) {
     const { modal, body } = dialog('存档显示名');
     const input = element('input', 'jd-input'); input.type = 'text'; input.maxLength = 90;
@@ -485,7 +531,33 @@ function editCrop(entity) {
         range.addEventListener('input', () => { values[key] = Number(range.value); const img = image.querySelector('img'); if (img) img.style.objectPosition = `${values.x}% ${values.y}%`; });
         label.append(range); body.append(label);
     }
-    body.append(button('保存封面位置', 'jd-primary-button', () => { settings().crops[entity.key] = values; save(); for (const shell of shells) shell.draw(); modal.close(); }));
+    const replaceInput = element('input'); replaceInput.type = 'file'; replaceInput.accept = 'image/*'; replaceInput.hidden = true;
+    const replace = button('更换角色卡封面', 'jd-text-button jd-replace-avatar', () => replaceInput.click(), '替换酒馆原始角色卡图片，角色设定和存档会保留');
+    replaceInput.addEventListener('change', () => {
+        const file = replaceInput.files?.[0]; replaceInput.value = '';
+        if (!file) return;
+        safeAction(async () => {
+            await replaceCharacterAvatar(entity, file);
+            modal.close();
+            globalThis.toastr?.success('已更换角色卡封面。', '砚台 · 角色书架');
+        });
+    });
+    const coverActions = element('div', 'jd-cover-actions'); coverActions.append(replace, replaceInput);
+    body.append(coverActions, button('保存封面位置', 'jd-primary-button', () => { settings().crops[entity.key] = values; save(); for (const shell of shells) shell.draw(); modal.close(); }));
+}
+
+async function replaceCharacterAvatar(entity, file) {
+    if (entity.kind !== 'char') throw new Error('只有角色卡支持更换原始封面。');
+    if (entity.id === 'none') throw new Error('这张卡没有原始角色文件，请先在酒馆原生编辑页添加封面。');
+    if (!file.type?.startsWith('image/')) throw new Error('请选择图片文件。');
+    const api = await loadCore();
+    const form = new FormData(); form.append('avatar', file, file.name); form.append('avatar_url', entity.id);
+    const response = await fetch(url('api/characters/edit-avatar'), {
+        method: 'POST', headers: api.getRequestHeaders?.({ omitContentType: true }) || ctx().getRequestHeaders?.({ omitContentType: true }) || {}, body: form, cache: 'no-cache',
+    });
+    if (!response.ok) throw new Error('当前酒馆未提供换封面接口，请使用原生角色编辑页。');
+    invalidateArchiveData();
+    for (const shell of shells) shell.draw();
 }
 
 function card(entity, shell) {
@@ -520,7 +592,7 @@ function card(entity, shell) {
         settings().favorites[entity.key] = !isFavorite(entity, settings()); save(); for (const view of shells) view.draw();
     }, `收藏${entity.name}`);
     favorite.setAttribute('aria-pressed', String(isFavorite(entity, settings()))); actions.append(favorite);
-    if (imageSource(entity)) actions.append(button('⌖', 'jd-icon-button', () => editCrop(entity), `调整${entity.name}的封面`));
+    if (entity.kind === 'char' || imageSource(entity)) actions.append(button('⌖', 'jd-icon-button', () => editCrop(entity), `调整或更换${entity.name}的封面`));
     item.append(actions);
     shell.visible.set(entity.key, item);
     shell.organizer.decorateCard(item, main, entity);
@@ -583,12 +655,16 @@ function createShelf(isHome = false) {
     sortControl.addEventListener('focusout', event => {
         if (event.relatedTarget && !sortControl.contains(event.relatedTarget)) closeSort();
     });
-    sortControl.append(sort, sortMenu); navigation.append(tabs, sortControl); toolbar.append(navigation);
+    sortControl.append(sort, sortMenu);
+    navigation.append(tabs, sortControl);
+    toolbar.append(navigation);
     if (isHome) toolbar.append(button('原版首页', 'jd-tab jd-native-home', () => { dismissedHome = true; reconcileHome(); }));
     toolbar.append(search);
     const info = element('div', 'jd-shelf-info'); const tally = element('span', 'jd-card-tally');
     const refresh = button('刷新 ↻', 'jd-text-button', () => { invalidateArchiveData(); for (const view of shells) view.draw(); });
     const sortStatus = element('span', 'jd-sort-status'); sortStatus.setAttribute('role', 'status');
+    const addCharacter = button('', 'jd-add-character', openNativeCharacterImporter, '从文件导入角色卡');
+    const addIcon = element('i', 'fa-solid fa-file-import'); addIcon.setAttribute('aria-hidden', 'true'); addCharacter.append(addIcon);
     const notice = element('p', 'jd-shelf-notice'); notice.setAttribute('role', 'status');
     const grid = element('div', 'jd-story-grid');
     const pager = element('nav', 'jd-pager'); pager.setAttribute('aria-label', '书架分页');
@@ -603,7 +679,7 @@ function createShelf(isHome = false) {
     tabs.append(shell.organizer.control);
     const favoriteTab = button('收藏', 'jd-tab', () => { shell.filter = shell.filter === 'favorites' ? 'all' : 'favorites'; shell.page = 0; shell.draw(); shell.remember(); });
     favoriteTab.dataset.filter = 'favorites'; tabs.append(favoriteTab);
-    info.append(tally, sortStatus, shell.organizer.organize, refresh);
+    info.append(tally, addCharacter, sortStatus, shell.organizer.organize, refresh);
     const pageLabel = element('span', 'jd-page-label'); pageLabel.setAttribute('aria-live', 'polite');
     const turnPage = delta => {
         shell.page += delta; shell.draw(); if (!shell.query) shell.remember();
@@ -736,6 +812,16 @@ function restoreHome() {
         document.getElementById('chat').scrollTop = 0;
         rootHome.root.querySelector('.jd-tab')?.focus({ preventScroll: true });
     }
+}
+function openNativeCharacterImporter() {
+    // Reuse the native import button in the user's click stack. This opens
+    // the OS file picker without leaving the bookshelf or navigating through
+    // the character-management home screen.
+    const native = document.getElementById('character_import_button');
+    const input = document.getElementById('character_import_file');
+    if (native) native.click();
+    else if (input) input.click();
+    else report('当前酒馆没有找到原生角色卡导入入口。');
 }
 function openShelf() {
     if (opening) { report('正在打开存档，请稍候。'); return; }

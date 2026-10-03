@@ -1,3 +1,5 @@
+import { NO_TAGS, isTagScope, tagFromScope, tagScope } from './core.js';
+
 /* Flat, display-only folders. Character files and chat metadata stay with ST. */
 export const PAGE_SIZES = [20, 40];
 export const pageSize = value => PAGE_SIZES.includes(Number(value)) ? Number(value) : 20;
@@ -24,7 +26,7 @@ export function foldersFor(settings) {
 // A small account setting, shared by the homepage and popup. Searches are temporary.
 export function shelfView(settings, value = settings.viewState) {
     value = value && typeof value === 'object' ? value : {};
-    const valid = value.scope === 'all' || value.scope === 'unfiled' || foldersFor(settings).some(f => f.id === value.scope);
+    const valid = value.scope === 'all' || value.scope === 'unfiled' || isTagScope(value.scope) || foldersFor(settings).some(f => f.id === value.scope);
     return {
         scope: valid ? value.scope : 'all',
         filter: value.filter === 'favorites' ? 'favorites' : 'all',
@@ -42,6 +44,14 @@ export function folderOf(entity, settings, ids = new Set(foldersFor(settings).ma
     return !entity.assistant && ids.has(id) ? id : '';
 }
 export function filterFolder(entities, scope, settings) {
+    if (isTagScope(scope)) {
+        const tag = tagFromScope(scope);
+        return entities.filter(entity => {
+            if (entity.assistant) return false;
+            const tags = Array.isArray(entity.tags) ? entity.tags : [];
+            return tag === NO_TAGS ? tags.length === 0 : tags.includes(tag);
+        });
+    }
     if (scope === 'all') return entities;
     const ids = new Set(foldersFor(settings).map(f => f.id));
     return entities.filter(entity => !entity.assistant && folderOf(entity, settings, ids) === (scope === 'unfiled' ? '' : scope));
@@ -173,6 +183,35 @@ export function attachOrganizer({ shell, settings, save, redraw, element, button
             if (folder.id !== 'all') addDrop(option, folder.id === 'unfiled' ? '' : folder.id);
             menu.append(option);
         }
+        const tagged = new Set(); let hasNoTags = false;
+        for (const entity of shell.entities.values()) {
+            if (entity.assistant) continue;
+            const tags = Array.isArray(entity.tags) ? entity.tags.filter(Boolean) : [];
+            if (!tags.length) hasNoTags = true;
+            for (const tag of tags) tagged.add(String(tag));
+        }
+        const tagNames = [...tagged].sort((a, b) => a.localeCompare(b, 'zh-CN', { numeric: true }));
+        if (tagNames.length || hasNoTags) {
+            const label = element('div', 'jd-folder-section-label', '标签视图');
+            label.title = '标签视图只筛选，不会移动角色卡';
+            menu.append(label);
+            for (const tag of tagNames) {
+                const id = tagScope(tag);
+                const option = button(`#${tag}`, 'jd-folder-option jd-tag-option', () => {
+                    shell.scope = id; shell.page = 0; close(true); shell.draw(); shell.remember();
+                });
+                option.dataset.tag = tag; option.setAttribute('aria-pressed', String(id === shell.scope));
+                menu.append(option);
+            }
+            if (hasNoTags) {
+                const id = tagScope(NO_TAGS);
+                const option = button('无标签', 'jd-folder-option jd-tag-option', () => {
+                    shell.scope = id; shell.page = 0; close(true); shell.draw(); shell.remember();
+                });
+                option.dataset.tag = NO_TAGS; option.setAttribute('aria-pressed', String(id === shell.scope));
+                menu.append(option);
+            }
+        }
         const actions = element('div', 'jd-folder-actions');
         actions.append(button('＋ 新建文件夹', 'jd-folder-option', () => editFolder()));
         const current = foldersFor(settings()).find(f => f.id === shell.scope);
@@ -211,11 +250,21 @@ export function attachOrganizer({ shell, settings, save, redraw, element, button
     function sync() {
         for (const key of shell.selected) if (!shell.entities.has(key) || shell.entities.get(key).assistant) shell.selected.delete(key);
         const folders = foldersFor(settings());
-        if (shell.scope !== 'all' && shell.scope !== 'unfiled' && !folders.some(f => f.id === shell.scope)) {
+        const validTag = isTagScope(shell.scope) && [...shell.entities.values()].some(entity => {
+            if (entity.assistant) return false;
+            const tags = Array.isArray(entity.tags) ? entity.tags.filter(Boolean) : [];
+            return tagFromScope(shell.scope) === NO_TAGS ? tags.length === 0 : tags.includes(tagFromScope(shell.scope));
+        });
+        if (shell.scope !== 'all' && shell.scope !== 'unfiled' && !validTag && !folders.some(f => f.id === shell.scope)) {
             shell.scope = 'all'; shell.page = 0; shell.remember();
         }
-        const name = shell.scope === 'all' ? '全部' : shell.scope === 'unfiled' ? '未分类' : folders.find(f => f.id === shell.scope).name;
-        toggle.textContent = name + ' ▾'; toggle.title = name + ' · 筛选文件夹，也可拖入卡片';
+        const tagScopeActive = isTagScope(shell.scope);
+        const tag = tagScopeActive ? tagFromScope(shell.scope) : '';
+        const name = shell.scope === 'all' ? '全部'
+            : shell.scope === 'unfiled' ? '未分类'
+                : tagScopeActive ? (tag === NO_TAGS ? '无标签' : `#${tag || '无标签'}`)
+                    : folders.find(f => f.id === shell.scope)?.name || '全部';
+        toggle.textContent = name + ' ▾'; toggle.title = tagScopeActive ? `${name} · 仅筛选，不会移动角色卡` : name + ' · 筛选文件夹，也可拖入卡片';
         bar.hidden = !shell.organizing; organize.textContent = shell.organizing ? '退出整理' : '整理';
         organize.setAttribute('aria-pressed', String(shell.organizing));
         shell.root.classList.toggle('jd-organizing', shell.organizing);

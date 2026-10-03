@@ -1,8 +1,17 @@
 {
   "schema": 1,
   "extension": "jingdu-bookshelf",
-  "latest": "1.4.3",
+  "latest": "1.4.4",
   "releases": [
+    {
+      "version": "1.4.4",
+      "branch": "v1.4.4",
+      "settings_schema": 1,
+      "minimum_client_version": "1.16.0",
+      "helper": "releases/yantai-bookshelf-v1.4.4-helper.json",
+      "sha256": "e80fe656e9259d34ffff557c9ddc5b8ff31d8a71fe61426b5f0f63ad3eba4c86",
+      "notes": "新增角色卡文件导入、已有标签筛选、角色卡封面替换，以及存档页的原生角色卡删除入口。"
+    },
     {
       "version": "1.4.3",
       "branch": "v1.4.3",

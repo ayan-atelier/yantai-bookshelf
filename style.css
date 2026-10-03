@@ -60,6 +60,10 @@ body.jd-bookshelf-home-active #chat.jd-bookshelf-home>.mes:is([type="welcome"],[
 .jd-shelf-info{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px 12px;margin:4px 0 10px;color:var(--shelf-muted);font-size:12px;}
 .jd-shelf-info>.jd-text-button{margin-left:auto;}
 .jd-card-tally{padding-inline-start:.35em;}
+.jd-bookshelf .jd-add-character{display:inline-flex;align-items:center;justify-content:center;flex:0 0 26px;width:26px;min-width:26px;height:28px;min-height:28px;margin:0 0 0 -7px;padding:0;border:0;background:none;color:var(--shelf-muted);font:15px/1 system-ui,sans-serif;}
+.jd-bookshelf .jd-add-character i{font-size:15px;}
+.jd-bookshelf .jd-add-character:hover{color:var(--shelf-ink);}
+.jd-bookshelf .jd-add-character:focus-visible{outline-offset:2px;}
 .jd-sort-status{font-size:11px;}
 .jd-shelf-notice{margin:0;color:var(--shelf-ink);font-size:13px;line-height:1.7;}
 .jd-shelf-notice:not(:empty){margin:12px 0;}
@@ -115,6 +119,9 @@ body.jd-bookshelf-home-active #chat.jd-bookshelf-home>.mes:is([type="welcome"],[
 .jd-shelf-dialog .jd-delete-actions button{margin:0;padding:9px 15px;min-height:42px;border:1px solid var(--shelf-line);border-radius:3px;font-size:14px;line-height:1.5;}
 .jd-shelf-dialog .jd-secondary-button{background:none;color:var(--shelf-muted);}
 .jd-shelf-dialog .jd-delete-confirm{color:var(--shelf-ink);border-color:currentColor;}
+.jd-shelf-dialog .jd-delete-character{margin-left:auto;}
+.jd-cover-actions{display:flex;justify-content:flex-start;align-items:center;min-height:38px;margin:4px 0 2px;}
+.jd-shelf-dialog .jd-replace-avatar{color:var(--shelf-muted);}
 .jd-crop-preview{width:min(100%,320px,34dvh);margin:0 auto 18px;border:1px solid var(--shelf-line);border-radius:3px;}
 .jd-crop-label{display:grid;grid-template-columns:5em minmax(0,1fr);align-items:center;gap:14px;margin:14px 0;font-size:13px;}
 .jd-crop-label input{width:100%;accent-color:var(--shelf-ink);}
@@ -169,6 +176,8 @@ body.jd-bookshelf-home-active #chat.jd-bookshelf-home>.mes:is([type="welcome"],[
 .jd-folder-option[aria-pressed=true]{font-weight:600;}
 .jd-folder-option.jd-drop-target{outline:2px solid var(--shelf-ink);outline-offset:-2px;}
 .jd-folder-actions{border-top:1px solid var(--shelf-line);margin-top:4px;padding-top:4px;}
+.jd-folder-section-label{margin:5px 4px 2px;padding:8px 6px 4px;border-top:1px solid var(--shelf-line);color:var(--shelf-muted);font-size:11px;line-height:1.5;}
+.jd-tag-option{padding-left:16px!important;}
 .jd-shelf-info>.jd-organize{margin-left:auto;}
 .jd-shelf-info>.jd-organize~.jd-text-button{margin-left:0;}
 .jd-organizer-bar{display:flex;align-items:center;flex-wrap:wrap;gap:4px 18px;padding:7px 10px;margin:0 0 12px;border:1px solid var(--shelf-line);border-radius:3px;background:var(--shelf-panel);font-size:12px;}

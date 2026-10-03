@@ -1,6 +1,16 @@
 /* Presentation helpers and native chat entrypoints. No generation requests. */
+// Legacy storage namespace kept for upgrades from the original 静读 build.
+// The user-facing product name is 砚台; changing this key would reset shelves.
 export const MODULE = 'jingdu_bookshelf';
 export const DEFAULT_CROP = Object.freeze({ x: 50, y: 25 });
+export const TAG_SCOPE_PREFIX = 'tag:';
+export const NO_TAGS = '__yantai_no_tags__';
+export const tagScope = tag => `${TAG_SCOPE_PREFIX}${encodeURIComponent(String(tag))}`;
+export const isTagScope = scope => typeof scope === 'string' && scope.startsWith(TAG_SCOPE_PREFIX);
+export const tagFromScope = scope => {
+    if (!isTagScope(scope)) return '';
+    try { return decodeURIComponent(scope.slice(TAG_SCOPE_PREFIX.length)); } catch { return ''; }
+};
 export const fileStem = name => String(name ?? '').replace(/\.jsonl$/i, '');
 export const entityKey = (kind, id) => `${kind}:${id}`;
 export const aliasKey = (key, name) => JSON.stringify([key, fileStem(name)]);
@@ -123,7 +133,9 @@ export function entitiesFromContext(ctx, assistantAvatar) {
         return {
             key: entityKey('char', c.avatar), kind: 'char', id: c.avatar,
             name: String(c.name || c.data?.name || fileStem(c.avatar)),
-            tags: [...new Set([...mapped, ...embedded])].slice(0, 4),
+            // Keep the complete set for filtering. The card renderer still
+            // truncates the visible excerpt, but tag views must see every tag.
+            tags: [...new Set([...mapped, ...embedded].map(tag => String(tag).trim()).filter(Boolean))],
             last: timestamp(c.date_last_chat),
             added: timestamp(c.date_added),
             nativeFavorite: c.fav === true || c.fav === 'true' || c.data?.extensions?.fav === true,
