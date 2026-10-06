@@ -6,6 +6,7 @@ import { attachHomeLayout } from './layout.js';
 
 const appRoot = new URL('../../../../', import.meta.url);
 const nativeModuleURL = import.meta.url;
+const CONTROL_KEY = Symbol.for('yantai.control.registry.v1');
 const ctx = () => globalThis.SillyTavern.getContext();
 const url = path => new URL(path, appRoot).href;
 const shells = new Set();
@@ -33,6 +34,7 @@ let characterSource;
 let characterLength = -1;
 let characterRevision = -1;
 let versionManager;
+let controlModule;
 
 function settings() {
     const store = ctx().extensionSettings;
@@ -46,6 +48,46 @@ function settings() {
     return s;
 }
 function save() { ctx().saveSettingsDebounced(); }
+function registerControlModule() {
+    const registry = globalThis[CONTROL_KEY] || (globalThis[CONTROL_KEY] = { version: 1, modules: new Map() });
+    if (!(registry.modules instanceof Map)) registry.modules = new Map();
+    controlModule = {
+        id: 'yantai-bookshelf', label: '角色书架', version: BOOKSHELF_VERSION, schemaVersion: 1, namespace: MODULE,
+        inspect() {
+            const value = settings();
+            const favoriteCount = Object.values(value.favorites || {}).filter(Boolean).length;
+            const cropCount = Object.keys(value.crops || {}).length;
+            return {
+                installed: true, enabled: value.enabled !== false, health: 'ok',
+                sources: [{ kind: 'host-settings', namespace: MODULE, scope: 'host', portable: 'partial', readable: true, writable: true }, { kind: 'server-asset', namespace: 'characters', scope: 'server', portable: 'yes', readable: true, writable: false }],
+                checks: [{ id: 'settings', label: '书架设置', status: 'ok', detail: `收藏 ${favoriteCount} 项 · 裁切 ${cropCount} 项` }, { id: 'sync', label: '跨设备', status: 'degraded', detail: '设置依赖酒馆扩展设置，尚未启用版本化冲突提示' }],
+            };
+        },
+        async setEnabled(value) {
+            const enabled = Boolean(value);
+            settings().enabled = enabled;
+            dismissedHome = false;
+            save();
+            updateEnabledUi(enabled);
+            if (!enabled) {
+                unmountHome();
+                document.querySelectorAll('.jd-shelf-dialog[open]').forEach(dialog => dialog.close());
+            }
+            scheduleHome();
+            for (const shell of shells) shell.draw();
+            globalThis.dispatchEvent?.(new CustomEvent('yantai:control:updated'));
+            return enabled;
+        },
+    };
+    registry.modules.set(controlModule.id, controlModule);
+    globalThis.dispatchEvent?.(new CustomEvent('yantai:control:updated'));
+}
+function unregisterControlModule() {
+    const registry = globalThis[CONTROL_KEY];
+    if (registry?.modules instanceof Map && registry.modules.get('yantai-bookshelf') === controlModule) registry.modules.delete('yantai-bookshelf');
+    globalThis.dispatchEvent?.(new CustomEvent('yantai:control:updated'));
+    controlModule = null;
+}
 function element(tag, className = '', text = '') {
     const el = document.createElement(tag);
     if (className) el.className = className;
@@ -824,12 +866,26 @@ function openNativeCharacterImporter() {
     else report('当前酒馆没有找到原生角色卡导入入口。');
 }
 function openShelf() {
+    if (!settings().enabled) {
+        report('角色书架已在砚台总库中关闭。可重新开启模块后使用。');
+        return;
+    }
     if (opening) { report('正在打开存档，请稍候。'); return; }
     if (!hasSelection() && settings().enabled && document.querySelector('#chat .welcomePanel')) { restoreHome(); return; }
     if (rootHome?.root.isConnected) { document.getElementById('chat').scrollTop = 0; rootHome.root.querySelector('.jd-search').focus(); return; }
     const { modal, body } = dialog('角色书架', true);
     const shelf = createShelf(); body.append(shelf.root);
     modal.addEventListener('close', shelf.dispose, { once: true });
+}
+function updateEnabledUi(value = settings().enabled) {
+    const enabled = Boolean(value);
+    const entry = document.getElementById('jd-bookshelf-open');
+    if (entry) {
+        entry.hidden = !enabled;
+        entry.setAttribute('aria-disabled', String(!enabled));
+    }
+    const check = document.querySelector('#jd-bookshelf-settings input[type="checkbox"]');
+    if (check) check.checked = enabled;
 }
 function installControls() {
     if (!document.getElementById('jd-bookshelf-open')) {
@@ -858,16 +914,18 @@ function installControls() {
         const content = element('div', 'inline-drawer-content'); content.id = 'jd-bookshelf-settings-content';
         content.append(element('small', 'jd-install-status', `已加载 · V${BOOKSHELF_VERSION} · 配色跟随当前酒馆主题`));
         const label = element('label', 'checkbox_label'); const check = element('input'); check.type = 'checkbox'; check.checked = settings().enabled;
-        check.addEventListener('change', () => { settings().enabled = check.checked; dismissedHome = false; save(); scheduleHome(); });
-        label.append(check, element('span', '', '首页显示角色书架'));
+        check.addEventListener('change', () => { settings().enabled = check.checked; dismissedHome = false; save(); updateEnabledUi(check.checked); scheduleHome(); globalThis.dispatchEvent?.(new CustomEvent('yantai:control:updated')); });
+        label.append(check, element('span', '', '启用角色书架功能（首页显示）'));
         content.append(label, button('打开书架', 'menu_button', openShelf), element('small', '', '封面右上角：图钉置顶、星号收藏、裁切调整封面。置顶按点击先后排列，其余可切换排序；点封面进入存档列表，右上角可新建聊天。'));
         content.append(button('版本与更新', 'menu_button jd-version-open', showVersionManager));
         drawer.append(header, content); panel.append(drawer); host.append(panel);
     }
+    updateEnabledUi();
 }
 export function onEnable() {
     if (enabledRuntime) return;
     enabledRuntime = true;
+    registerControlModule();
     const context = ctx(); const types = context.eventTypes || context.event_types;
     const subscribe = (type, fn) => { if (type) { context.eventSource.on(type, fn); listeners.push([type, fn]); } };
     const ready = () => { installControls(); if (!observer && document.getElementById('chat')) { observer = new MutationObserver(scheduleHome); observer.observe(document.getElementById('chat'), { childList: true }); } scheduleHome(); };
@@ -884,6 +942,7 @@ export function onEnable() {
 }
 export function onDisable() {
     enabledRuntime = false;
+    unregisterControlModule();
     versionManager?.dispose(); versionManager = null;
     for (const request of requests) request.abort(); requests.clear();
     invalidateArchiveData();
