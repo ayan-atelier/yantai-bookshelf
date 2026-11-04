@@ -28,7 +28,7 @@ V1.4.4 · 创意与测试：阿砚 · 代码：Codex
 
 ### GitHub 链接安装
 
-最低要求：SillyTavern 1.16.0。在酒馆“扩展 → 安装扩展”中粘贴：
+最低要求：SillyTavern 1.14.0。在酒馆“扩展 → 安装扩展”中粘贴：
 
 ```text
 https://github.com/ayan-atelier/yantai-bookshelf
