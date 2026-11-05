@@ -97,7 +97,7 @@ export function attachOrganizer({ shell, settings, save, redraw, element, button
     toggle.setAttribute('aria-expanded', 'false');
     control.append(toggle, menu);
     shell.scope ??= 'all'; shell.selected = new Set(); shell.organizing = false;
-    let dragKeys = [], disposed = false;
+    let dragKeys = [], disposed = false, tagsExpanded = false;
     const holds = new Set();
     const outside = event => { if (!control.contains(event.target)) close(); };
     function close(focus = false) {
@@ -106,6 +106,7 @@ export function attachOrganizer({ shell, settings, save, redraw, element, button
         if (focus && toggle.isConnected) toggle.focus({ preventScroll: true });
     }
     function open(focus = true) {
+        tagsExpanded = isTagScope(shell.scope);
         renderMenu(); menu.hidden = false; toggle.setAttribute('aria-expanded', 'true');
         document.addEventListener('pointerdown', outside, true);
         if (focus) menu.querySelector('button')?.focus({ preventScroll: true });
@@ -115,7 +116,7 @@ export function attachOrganizer({ shell, settings, save, redraw, element, button
         if (event.key === 'Tab' && !menu.hidden) { close(true); return; }
         if (event.target === toggle && event.key === 'ArrowDown') { event.preventDefault(); open(); }
         if (!menu.hidden && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) && event.target !== toggle) {
-            event.preventDefault(); const options = [...menu.querySelectorAll('button')]; const current = options.indexOf(document.activeElement);
+            event.preventDefault(); const options = [...menu.querySelectorAll('button')].filter(btn => !btn.closest('[hidden]')); const current = options.indexOf(document.activeElement);
             const next = event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1 : (current + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
             options[next]?.focus({ preventScroll: true });
         }
@@ -183,6 +184,11 @@ export function attachOrganizer({ shell, settings, save, redraw, element, button
             if (folder.id !== 'all') addDrop(option, folder.id === 'unfiled' ? '' : folder.id);
             menu.append(option);
         }
+        const actions = element('div', 'jd-folder-actions');
+        actions.append(button('＋ 新建文件夹', 'jd-folder-option', () => editFolder()));
+        const current = foldersFor(settings()).find(f => f.id === shell.scope);
+        if (current) actions.append(button('重命名文件夹', 'jd-folder-option', () => editFolder(current)), button('删除文件夹', 'jd-folder-option', () => deleteFolder(current)));
+        menu.append(actions);
         const tagged = new Set(); let hasNoTags = false;
         for (const entity of shell.entities.values()) {
             if (entity.assistant) continue;
@@ -192,16 +198,23 @@ export function attachOrganizer({ shell, settings, save, redraw, element, button
         }
         const tagNames = [...tagged].sort((a, b) => a.localeCompare(b, 'zh-CN', { numeric: true }));
         if (tagNames.length || hasNoTags) {
-            const label = element('div', 'jd-folder-section-label', '标签视图');
-            label.title = '标签视图只筛选，不会移动角色卡';
-            menu.append(label);
+            const tagSection = element('div', 'jd-tag-section');
+            const tagList = element('div', 'jd-tag-list');
+            tagList.hidden = !tagsExpanded;
+            const tagToggle = button(tagsExpanded ? '标签筛选 ▾' : '标签筛选 ▸', 'jd-folder-option jd-tag-toggle', () => {
+                tagsExpanded = !tagsExpanded;
+                tagList.hidden = !tagsExpanded;
+                tagToggle.textContent = tagsExpanded ? '标签筛选 ▾' : '标签筛选 ▸';
+                tagToggle.setAttribute('aria-expanded', String(tagsExpanded));
+            }, '按酒馆标签临时筛选，不会移动角色卡');
+            tagToggle.setAttribute('aria-expanded', String(tagsExpanded));
             for (const tag of tagNames) {
                 const id = tagScope(tag);
                 const option = button(`#${tag}`, 'jd-folder-option jd-tag-option', () => {
                     shell.scope = id; shell.page = 0; close(true); shell.draw(); shell.remember();
                 });
                 option.dataset.tag = tag; option.setAttribute('aria-pressed', String(id === shell.scope));
-                menu.append(option);
+                tagList.append(option);
             }
             if (hasNoTags) {
                 const id = tagScope(NO_TAGS);
@@ -209,14 +222,11 @@ export function attachOrganizer({ shell, settings, save, redraw, element, button
                     shell.scope = id; shell.page = 0; close(true); shell.draw(); shell.remember();
                 });
                 option.dataset.tag = NO_TAGS; option.setAttribute('aria-pressed', String(id === shell.scope));
-                menu.append(option);
+                tagList.append(option);
             }
+            tagSection.append(tagToggle, tagList);
+            menu.append(tagSection);
         }
-        const actions = element('div', 'jd-folder-actions');
-        actions.append(button('＋ 新建文件夹', 'jd-folder-option', () => editFolder()));
-        const current = foldersFor(settings()).find(f => f.id === shell.scope);
-        if (current) actions.append(button('重命名文件夹', 'jd-folder-option', () => editFolder(current)), button('删除文件夹', 'jd-folder-option', () => deleteFolder(current)));
-        menu.append(actions);
         // Match the sort menu's explicit focusability, including action buttons.
         for (const option of menu.querySelectorAll('button')) option.tabIndex = -1;
     }

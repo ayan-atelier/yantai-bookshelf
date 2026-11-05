@@ -129,13 +129,12 @@ export function entitiesFromContext(ctx, assistantAvatar) {
     const tags = new Map((ctx.tags || []).map(tag => [String(tag.id), tag.name]));
     const cards = (ctx.characters || []).filter(c => c && typeof c.avatar === 'string').map(c => {
         const mapped = (ctx.tagMap?.[c.avatar] || []).map(id => tags.get(String(id))).filter(Boolean);
-        const embedded = (c.tags || c.data?.tags || []).filter?.(tag => typeof tag === 'string') || [];
         return {
             key: entityKey('char', c.avatar), kind: 'char', id: c.avatar,
             name: String(c.name || c.data?.name || fileStem(c.avatar)),
-            // Keep the complete set for filtering. The card renderer still
-            // truncates the visible excerpt, but tag views must see every tag.
-            tags: [...new Set([...mapped, ...embedded].map(tag => String(tag).trim()).filter(Boolean))],
+            // Only use tags managed in the host tag library (ctx.tags / ctx.tagMap),
+            // ignoring arbitrary author-embedded card metadata tags.
+            tags: [...new Set(mapped.map(tag => String(tag).trim()).filter(Boolean))],
             last: timestamp(c.date_last_chat),
             added: timestamp(c.date_added),
             nativeFavorite: c.fav === true || c.fav === 'true' || c.data?.extensions?.fav === true,
