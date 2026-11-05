@@ -9,7 +9,7 @@
       "settings_schema": 1,
       "minimum_client_version": "1.14.0",
       "helper": "releases/yantai-bookshelf-v1.4.4-helper.json",
-      "sha256": "e80fe656e9259d34ffff557c9ddc5b8ff31d8a71fe61426b5f0f63ad3eba4c86",
+      "sha256": "45e072a874196c20abd185bad4007ab2b4ac77a8a14e06188297c1b93879beec",
       "notes": "新增角色卡文件导入、已有标签筛选、角色卡封面替换，以及存档页的原生角色卡删除入口。"
     },
     {
