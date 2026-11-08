@@ -191,7 +191,23 @@ async function readFiles(entity) {
     }
     const character = charFor(entity);
     if (!character) throw new Error('这张角色卡已被移动或改名，请刷新书架');
-    const data = await request('api/characters/chats', { avatar_url: entity.id, simple: true });
+    let data;
+    try {
+        data = await request('api/characters/chats', { avatar_url: entity.id, simple: true });
+    } catch (error) {
+        try {
+            data = await request('api/characters/chats', { avatar_url: entity.id });
+        } catch {
+            if (/Unexpected IPC byte response/i.test(String(error?.message || error))) {
+                const activeChat = fileStem(character.chat);
+                if (activeChat && (character.chat_size > 0 || timestamp(character.date_last_chat) > 0 || selectedEntityMatches(ctx(), entity))) {
+                    return [{ name: activeChat, date: timestamp(character.date_last_chat), messages: null, fallback: true }];
+                }
+                return [];
+            }
+            throw error;
+        }
+    }
     // Native 1.18.0 returns {error:true} when a new character has no chat folder.
     // Accept it only when native character metadata independently says no chats.
     if (data?.error === true && character.chat_size === 0 && !timestamp(character.date_last_chat)) return [];
@@ -340,7 +356,13 @@ function choose(entity) {
 }
 async function newChat(entity) {
     const revision = cardsRevision;
-    const files = await getFiles(entity, { fresh: true });
+    let files;
+    try {
+        files = await getFiles(entity, { fresh: true });
+    } catch {
+        const activeChat = entity.kind === 'char' ? fileStem(charFor(entity)?.chat) : '';
+        files = activeChat ? [{ name: activeChat }] : [];
+    }
     if (!enabledRuntime || revision !== cardsRevision) throw new Error('聊天或角色列表已经变化，请重新选择。');
     // Selecting a never-played character already creates its first greeting.
     // Reuse that new story instead of saving it and making a second empty file.
@@ -389,9 +411,18 @@ function showArchives(entity, cached) {
             const item = element('div', 'jd-save-row'); item.dataset.filename = row.name;
             const main = button('', 'jd-open-chat', () => {
                 safeAction(async () => {
-                    const latest = await getFiles(entity, { fresh: true });
+                    if (row.fallback) {
+                        await openNative(entity);
+                        return;
+                    }
+                    let latest = null;
+                    try {
+                        latest = await getFiles(entity, { fresh: true });
+                    } catch {
+                        latest = null;
+                    }
                     if (!current()) return;
-                    if (!latest.some(r => r.name === row.name)) {
+                    if (Array.isArray(latest) && !latest.some(r => r.name === row.name)) {
                         rows = mergeDetails(latest, rows); counts.set(entity.key, rows.length); updateCounts(entity.key, rows.length); draw();
                         throw new Error('这份存档已被移动或改名，列表已刷新');
                     }
@@ -431,8 +462,12 @@ function showArchives(entity, cached) {
         } catch (error) {
             if (current() && id === requestId) {
                 sub.textContent = rows === null ? '存档列表暂未读取' : sub.textContent;
-                if (rows === null) list.replaceChildren();
-                notice.textContent = `${error.message || '读取失败'}，可点「刷新列表」重试。`;
+                if (rows === null) {
+                    list.replaceChildren(button('直接打开当前聊天 ↗', 'jd-primary-button jd-open-native', () => {
+                        safeAction(() => openNative(entity));
+                    }));
+                }
+                notice.textContent = `${error.message || '读取失败'}，可直接打开当前聊天或点「刷新列表」重试。`;
             }
         }
     };
