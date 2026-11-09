@@ -1,8 +1,17 @@
 {
   "schema": 1,
   "extension": "jingdu-bookshelf",
-  "latest": "1.4.4",
+  "latest": "1.4.5",
   "releases": [
+    {
+      "version": "1.4.5",
+      "branch": "v1.4.5",
+      "settings_schema": 1,
+      "minimum_client_version": "1.14.0",
+      "helper": "releases/yantai-bookshelf-v1.4.5-helper.json",
+      "sha256": "b29d75c95c67c3bd266007829ebb223be8c3a48ed07c6e14bc42e9479fc13f40",
+      "notes": "默认折叠标签筛选菜单并仅展示酒馆标签库标签；增强 TauriTavern 存档读取与隐藏样式兼容性。"
+    },
     {
       "version": "1.4.4",
       "branch": "v1.4.4",

@@ -200,30 +200,38 @@ export function attachOrganizer({ shell, settings, save, redraw, element, button
         if (tagNames.length || hasNoTags) {
             const tagSection = element('div', 'jd-tag-section');
             const tagList = element('div', 'jd-tag-list');
-            tagList.hidden = !tagsExpanded;
+            const syncTagList = () => {
+                tagList.replaceChildren();
+                tagList.hidden = !tagsExpanded;
+                tagList.style.display = tagsExpanded ? '' : 'none';
+                if (!tagsExpanded) return;
+                for (const tag of tagNames) {
+                    const id = tagScope(tag);
+                    const option = button(`#${tag}`, 'jd-folder-option jd-tag-option', () => {
+                        shell.scope = id; shell.page = 0; close(true); shell.draw(); shell.remember();
+                    });
+                    option.dataset.tag = tag; option.setAttribute('aria-pressed', String(id === shell.scope));
+                    option.tabIndex = -1;
+                    tagList.append(option);
+                }
+                if (hasNoTags) {
+                    const id = tagScope(NO_TAGS);
+                    const option = button('无标签', 'jd-folder-option jd-tag-option', () => {
+                        shell.scope = id; shell.page = 0; close(true); shell.draw(); shell.remember();
+                    });
+                    option.dataset.tag = NO_TAGS; option.setAttribute('aria-pressed', String(id === shell.scope));
+                    option.tabIndex = -1;
+                    tagList.append(option);
+                }
+            };
             const tagToggle = button(tagsExpanded ? '标签筛选 ▾' : '标签筛选 ▸', 'jd-folder-option jd-tag-toggle', () => {
                 tagsExpanded = !tagsExpanded;
-                tagList.hidden = !tagsExpanded;
                 tagToggle.textContent = tagsExpanded ? '标签筛选 ▾' : '标签筛选 ▸';
                 tagToggle.setAttribute('aria-expanded', String(tagsExpanded));
+                syncTagList();
             }, '按酒馆标签临时筛选，不会移动角色卡');
             tagToggle.setAttribute('aria-expanded', String(tagsExpanded));
-            for (const tag of tagNames) {
-                const id = tagScope(tag);
-                const option = button(`#${tag}`, 'jd-folder-option jd-tag-option', () => {
-                    shell.scope = id; shell.page = 0; close(true); shell.draw(); shell.remember();
-                });
-                option.dataset.tag = tag; option.setAttribute('aria-pressed', String(id === shell.scope));
-                tagList.append(option);
-            }
-            if (hasNoTags) {
-                const id = tagScope(NO_TAGS);
-                const option = button('无标签', 'jd-folder-option jd-tag-option', () => {
-                    shell.scope = id; shell.page = 0; close(true); shell.draw(); shell.remember();
-                });
-                option.dataset.tag = NO_TAGS; option.setAttribute('aria-pressed', String(id === shell.scope));
-                tagList.append(option);
-            }
+            syncTagList();
             tagSection.append(tagToggle, tagList);
             menu.append(tagSection);
         }

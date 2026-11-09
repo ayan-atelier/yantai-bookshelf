@@ -6,8 +6,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root = process.cwd();
-const read = name => fs.readFileSync(path.join(root, name), 'utf8');
-const write = (name, value) => fs.writeFileSync(path.join(root, name), value);
+const read = name => fs.readFileSync(path.join(root, name), 'utf8').replace(/\r\n/g, '\n');
+const write = (name, value) => fs.writeFileSync(path.join(root, name), value.replace(/\r\n/g, '\n'));
 
 function extractEmbedded(helper) {
     const start = helper.content.indexOf('    module.textContent = ');
@@ -86,10 +86,10 @@ const oldEmbedded = extractEmbedded(old);
 const embedded = buildEmbedded(oldEmbedded);
 const next = {
     ...old,
-    name: '砚台 · 角色书架 V1.4.4（酒馆助手版）',
-    info: `# 砚台 · 角色书架 V1.4.4\n创意与测试：阿砚 · 代码：Codex\n新增首页原生角色卡导入、标签视图、完整标签筛选、角色卡封面更换，以及存档页原生角色卡删除与二次确认。\n导入酒馆助手全局脚本库，只启用一份书架。\n支持角色展示、轻量分类、存档管理与浏览位置记忆。\n在书架设置的“版本与更新”里手动检查、更新或退回兼容版本。\n发布仓库：https://github.com/ayan-atelier/yantai-bookshelf\n完整代码随包提供；启动时不检查或下载更新，不调用模型。\n`,
+    name: '砚台 · 角色书架 V1.4.5（酒馆助手版）',
+    info: `# 砚台 · 角色书架 V1.4.5\n创意与测试：阿砚 · 代码：Codex\n新增首页原生角色卡导入、标签视图、完整标签筛选、角色卡封面更换，以及存档页原生角色卡删除与二次确认。\n导入酒馆助手全局脚本库，只启用一份书架。\n支持角色展示、轻量分类、存档管理与浏览位置记忆。\n在书架设置的“版本与更新”里手动检查、更新或退回兼容版本。\n发布仓库：https://github.com/ayan-atelier/yantai-bookshelf\n完整代码随包提供；启动时不检查或下载更新，不调用模型。\n`,
 };
 next.content = rebuildContent(old.content, embedded);
-next.content = next.content.replace('砚台 · 角色书架 V1.4.3 · 酒馆助手版', '砚台 · 角色书架 V1.4.4 · 酒馆助手版');
-write('releases/yantai-bookshelf-v1.4.4-helper.json', JSON.stringify(next, null, 2) + '\n');
-console.log(`built releases/yantai-bookshelf-v1.4.4-helper.json (${next.content.length} chars)`);
+next.content = next.content.replace('砚台 · 角色书架 V1.4.3 · 酒馆助手版', '砚台 · 角色书架 V1.4.5 · 酒馆助手版');
+write('releases/yantai-bookshelf-v1.4.5-helper.json', JSON.stringify(next, null, 2) + '\n');
+console.log(`built releases/yantai-bookshelf-v1.4.5-helper.json (${next.content.length} chars)`);
