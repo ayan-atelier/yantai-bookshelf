@@ -24,7 +24,7 @@ const nameOrder = new Intl.Collator('zh-CN', { numeric: true, sensitivity: 'base
 
 // Cache only successful reads; share concurrent requests, and never let an old
 // request repopulate the cache after a chat/character change or manual refresh.
-export function createArchiveCache({ ttl = 30000, now = () => Date.now() } = {}) {
+export function createArchiveCache({ ttl = 300000, now = () => Date.now() } = {}) {
     const values = new Map(), pending = new Map();
     let revision = 0;
     return {
@@ -44,6 +44,7 @@ export function createArchiveCache({ ttl = 30000, now = () => Date.now() } = {})
             pending.set(key, result);
             return result;
         },
+        delete(key) { values.delete(key); pending.delete(key); },
         clear() { revision++; values.clear(); pending.clear(); },
     };
 }

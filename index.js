@@ -1,4 +1,4 @@
-import { MODULE, DEFAULT_CROP, fileStem, aliasKey, bounded, timestamp, normalizeRows, mergeDetails, displayChatName, entitiesFromContext, isFavorite, isPinned, filterEntities, SORT_OPTIONS, normalizeSort, createArchiveCache, switchNativeChat, createNativeChat, deleteNativeChat, selectedEntityMatches } from './core.js';
+import { MODULE, DEFAULT_CROP, fileStem, entityKey, aliasKey, bounded, timestamp, normalizeRows, mergeDetails, displayChatName, entitiesFromContext, isFavorite, isPinned, filterEntities, SORT_OPTIONS, normalizeSort, createArchiveCache, switchNativeChat, createNativeChat, deleteNativeChat, selectedEntityMatches } from './core.js';
 import { pageSize, pageWindow, filterFolder, attachOrganizer, shelfView, rememberShelfView } from './organizer.js';
 import { BOOKSHELF_VERSION, createVersionManager } from './versions.js';
 import { openVersionDialog } from './version-ui.js';
@@ -28,6 +28,8 @@ let coreModule;
 let groupModule;
 let rootHome;
 let cardsRevision = 0;
+let avatarRevision = 0;
+let lastActiveEntityKey = '';
 let dialogId = 0;
 let characterIndex;
 let characterSource;
@@ -35,13 +37,16 @@ let characterLength = -1;
 let characterRevision = -1;
 let versionManager;
 let controlModule;
+let galleryVisitEpoch = 0;
+const visitCoverPicks = new Map();
+let onExternalGalleryUpdated = null;
 
 function settings() {
     const store = ctx().extensionSettings;
     if (!store[MODULE] || typeof store[MODULE] !== 'object') store[MODULE] = {};
     const s = store[MODULE];
     if (typeof s.enabled !== 'boolean') s.enabled = true;
-    for (const key of ['favorites', 'aliases', 'crops']) if (!s[key] || typeof s[key] !== 'object' || Array.isArray(s[key])) s[key] = {};
+    for (const key of ['favorites', 'aliases', 'crops', 'galleries']) if (!s[key] || typeof s[key] !== 'object' || Array.isArray(s[key])) s[key] = {};
     if (!Array.isArray(s.pinned)) s.pinned = [];
     s.sort = normalizeSort(s.sort);
     s.pageSize = pageSize(s.pageSize);
@@ -96,16 +101,21 @@ function element(tag, className = '', text = '') {
 }
 function button(text, className, click, title) {
     const el = element('button', className, text); el.type = 'button';
-    if (text === '⌖' || className.split(' ').includes('jd-pin')) {
+    const clsList = className.split(' ');
+    const isPin = clsList.includes('jd-pin');
+    const isFav = clsList.includes('jd-favorite');
+    if (text === '⌖' || isPin || isFav) {
         el.textContent = '';
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('width', '18'); svg.setAttribute('height', '18');
+        svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('width', '16'); svg.setAttribute('height', '16');
         svg.setAttribute('aria-hidden', 'true'); svg.setAttribute('fill', 'none'); svg.setAttribute('stroke', 'currentColor');
-        svg.setAttribute('stroke-width', '1.5'); svg.setAttribute('stroke-linecap', 'round');
+        svg.setAttribute('stroke-width', '1.5'); svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round');
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.setAttribute('d', text === '⌖'
             ? 'M6 3v12a3 3 0 0 0 3 3h12M3 6h12a3 3 0 0 1 3 3v12'
-            : 'M9 3h6v6l3 4v2H6v-2l3-4V3M12 15v6');
+            : isFav
+                ? 'M12 3.2l2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 17.1 6.6 20l1-6.1-4.4-4.3 6.1-.9L12 3.2z'
+                : 'M9 3h6v6l3 4v2H6v-2l3-4V3M12 15v6');
         svg.append(path); el.append(svg);
     }
     if (title) { el.title = title; el.setAttribute('aria-label', title); }
@@ -231,8 +241,22 @@ async function readDeletionFiles(entity) {
     return [...new Set(remote.chats)].map(name => ({ name: fileStem(name), date: 0, messages: null }));
 }
 
-function invalidateArchiveData() {
-    cardsRevision++; counts.clear(); fileCache.clear(); detailCache.clear();
+function activeEntityKeyFromContext() {
+    const c = ctx();
+    if (c?.groupId !== undefined && c.groupId !== null && c.groupId !== '') return entityKey('group', String(c.groupId));
+    const avatar = c?.characterId !== undefined && c.characterId !== null && c.characterId !== '' ? c.characters?.[c.characterId]?.avatar : '';
+    return typeof avatar === 'string' && avatar ? entityKey('char', avatar) : '';
+}
+function invalidateEntityArchive(key) {
+    if (!key) return;
+    counts.delete(key);
+    fileCache.delete?.(key);
+    detailCache.delete?.(key);
+}
+function invalidateArchiveData({ bumpAvatars = false } = {}) {
+    cardsRevision++;
+    if (bumpAvatars) avatarRevision++;
+    counts.clear(); fileCache.clear(); detailCache.clear();
 }
 function getFiles(entity, options) {
     return fileCache.load(entity.key, () => readFiles(entity), options);
@@ -284,23 +308,84 @@ function imageSource(entity) {
     }
     return '';
 }
-function cropFor(entity) {
-    const crop = settings().crops[entity.key] || DEFAULT_CROP;
-    return `${bounded(crop.x, 50)}% ${bounded(crop.y, 25)}%`;
+function resolveSafeGalleryHref(rawUrl) {
+    if (typeof rawUrl !== 'string' || !rawUrl.trim()) return '';
+    const trimmed = rawUrl.trim();
+    if (/^(?:javascript|data|vbscript):/i.test(trimmed)) return '';
+    try {
+        const parsed = new URL(trimmed.startsWith('/') ? trimmed.slice(1) : trimmed, appRoot);
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.href;
+    } catch {}
+    return '';
 }
+
+function resolveEntityCoverChoice(entity) {
+    const s = settings();
+    const baseSrc = imageSource(entity);
+    const baseCrop = s.crops[entity.key] || DEFAULT_CROP;
+    const primary = baseSrc
+        ? {
+            id: 'primary',
+            src: entity.kind === 'char' ? `${baseSrc}${baseSrc.includes('?') ? '&' : '?'}yantai=${avatarRevision}` : baseSrc,
+            crop: `${bounded(baseCrop.x, 50)}% ${bounded(baseCrop.y, 25)}%`,
+            fallbackSrc: '',
+        }
+        : null;
+
+    if (entity.kind !== 'char') return primary;
+
+    const gal = s.galleries?.[entity.key];
+    const rawItems = Array.isArray(gal?.items) ? gal.items : [];
+    if (rawItems.length === 0) return primary;
+
+    const pool = primary ? [primary] : [];
+    for (const it of rawItems) {
+        if (!it || typeof it !== 'object') continue;
+        const href = resolveSafeGalleryHref(it.url);
+        if (!href) continue;
+        pool.push({
+            id: String(it.id || href),
+            src: href,
+            crop: `${bounded(it.x, 50)}% ${bounded(it.y, 25)}%`,
+            fallbackSrc: primary?.src || '',
+        });
+    }
+    if (pool.length <= 1) return pool[0] || null;
+
+    if (gal?.randomCover) {
+        const cacheKey = `${galleryVisitEpoch}:${entity.key}:${pool.length}`;
+        let idx = visitCoverPicks.get(cacheKey);
+        if (idx === undefined || idx < 0 || idx >= pool.length) {
+            idx = Math.floor(Math.random() * pool.length);
+            visitCoverPicks.set(cacheKey, idx);
+        }
+        return pool[idx];
+    }
+
+    if (typeof gal?.selectedId === 'string' && gal.selectedId && gal.selectedId !== 'primary') {
+        const matched = pool.find(item => item.id === gal.selectedId);
+        if (matched) return matched;
+    }
+    return pool[0];
+}
+
 function cover(entity, className = 'jd-cover') {
     const box = element('div', className);
     const fallback = element('span', 'jd-cover-letter', entity.assistant ? 'ST' : [...entity.name][0] || '书');
     fallback.setAttribute('aria-hidden', 'true'); box.append(fallback);
-    const src = imageSource(entity);
-    if (src) {
+    const chosen = resolveEntityCoverChoice(entity);
+    if (chosen?.src) {
         const img = element('img'); img.alt = '';
-        // Character images are served from the same filename after an avatar
-        // replacement. The revision query prevents the old bitmap lingering
-        // in the browser cache after a successful upload.
-        img.src = entity.kind === 'char' ? `${src}${src.includes('?') ? '&' : '?'}yantai=${cardsRevision}` : src;
-        img.loading = 'lazy'; img.decoding = 'async'; img.style.objectPosition = cropFor(entity);
-        img.addEventListener('error', () => img.remove(), { once: true }); box.append(img);
+        img.src = chosen.src;
+        img.loading = 'lazy'; img.decoding = 'async'; img.style.objectPosition = chosen.crop;
+        img.addEventListener('error', () => {
+            if (chosen.fallbackSrc && img.src !== chosen.fallbackSrc) {
+                img.src = chosen.fallbackSrc;
+                return;
+            }
+            img.remove();
+        });
+        box.append(img);
     }
     return box;
 }
@@ -346,7 +431,8 @@ async function safeAction(action) {
 async function openNative(entity, filename = null) {
     await switchNativeChat({ context: ctx, entity, filename, api: await loadCore(), groups: await loadGroups(), openAssistant: async () => (await loadWelcome()).openPermanentAssistantChat() });
     document.querySelectorAll('.jd-shelf-dialog[open]').forEach(d => d.close());
-    unmountHome(); invalidateArchiveData();
+    unmountHome(); invalidateEntityArchive(entity.key);
+    lastActiveEntityKey = entity.key;
 }
 
 function choose(entity) {
@@ -369,7 +455,8 @@ async function newChat(entity) {
     if (!files.length && !selectedEntityMatches(ctx(), entity)) return openNative(entity);
     await createNativeChat({ context: ctx, entity, api: await loadCore(), groups: await loadGroups(), openAssistant: async () => (await loadWelcome()).openPermanentAssistantChat() });
     document.querySelectorAll('.jd-shelf-dialog[open]').forEach(d => d.close());
-    unmountHome(); invalidateArchiveData();
+    unmountHome(); invalidateEntityArchive(entity.key);
+    lastActiveEntityKey = entity.key;
 }
 
 function updateCounts(key, count) {
@@ -414,17 +501,6 @@ function showArchives(entity, cached) {
                     if (row.fallback) {
                         await openNative(entity);
                         return;
-                    }
-                    let latest = null;
-                    try {
-                        latest = await getFiles(entity, { fresh: true });
-                    } catch {
-                        latest = null;
-                    }
-                    if (!current()) return;
-                    if (Array.isArray(latest) && !latest.some(r => r.name === row.name)) {
-                        rows = mergeDetails(latest, rows); counts.set(entity.key, rows.length); updateCounts(entity.key, rows.length); draw();
-                        throw new Error('这份存档已被移动或改名，列表已刷新');
                     }
                     await openNative(entity, row.name);
                 });
@@ -633,7 +709,7 @@ async function replaceCharacterAvatar(entity, file) {
         method: 'POST', headers: api.getRequestHeaders?.({ omitContentType: true }) || ctx().getRequestHeaders?.({ omitContentType: true }) || {}, body: form, cache: 'no-cache',
     });
     if (!response.ok) throw new Error('当前酒馆未提供换封面接口，请使用原生角色编辑页。');
-    invalidateArchiveData();
+    invalidateArchiveData({ bumpAvatars: true });
     for (const shell of shells) shell.draw();
 }
 
@@ -665,11 +741,10 @@ function card(entity, shell) {
         pin.setAttribute('aria-pressed', String(pinned));
         actions.append(pin);
     }
-    const favorite = button(isFavorite(entity, settings()) ? '★' : '☆', 'jd-icon-button jd-favorite', () => {
+    const favorite = button('', 'jd-icon-button jd-favorite', () => {
         settings().favorites[entity.key] = !isFavorite(entity, settings()); save(); for (const view of shells) view.draw();
     }, `收藏${entity.name}`);
     favorite.setAttribute('aria-pressed', String(isFavorite(entity, settings()))); actions.append(favorite);
-    if (entity.kind === 'char' || imageSource(entity)) actions.append(button('⌖', 'jd-icon-button', () => editCrop(entity), `调整或更换${entity.name}的封面`));
     item.append(actions);
     shell.visible.set(entity.key, item);
     shell.organizer.decorateCard(item, main, entity);
@@ -738,10 +813,10 @@ function createShelf(isHome = false) {
     if (isHome) toolbar.append(button('原版首页', 'jd-tab jd-native-home', () => { dismissedHome = true; reconcileHome(); }));
     toolbar.append(search);
     const info = element('div', 'jd-shelf-info'); const tally = element('span', 'jd-card-tally');
-    const refresh = button('刷新 ↻', 'jd-text-button', () => { invalidateArchiveData(); for (const view of shells) view.draw(); });
+    const refresh = button('刷新 ↻', 'jd-text-button', () => { invalidateArchiveData({ bumpAvatars: true }); for (const view of shells) view.draw(); });
     const sortStatus = element('span', 'jd-sort-status'); sortStatus.setAttribute('role', 'status');
     const addCharacter = button('', 'jd-add-character', openNativeCharacterImporter, '从文件导入角色卡');
-    const addIcon = element('i', 'fa-solid fa-file-import'); addIcon.setAttribute('aria-hidden', 'true'); addCharacter.append(addIcon);
+    addCharacter.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14 3 14 8 19 8"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>';
     const notice = element('p', 'jd-shelf-notice'); notice.setAttribute('role', 'status');
     const grid = element('div', 'jd-story-grid');
     const pager = element('nav', 'jd-pager'); pager.setAttribute('aria-label', '书架分页');
@@ -875,6 +950,8 @@ function reconcileHome() {
     } else returnButton?.remove();
     if (!eligible || dismissedHome) { unmountHome(); return; }
     if (rootHome?.root.isConnected) return;
+    galleryVisitEpoch += 1;
+    visitCoverPicks.clear();
     unmountHome(); rootHome = createShelf(true); chat.prepend(rootHome.root);
     chat.classList.add('jd-bookshelf-home'); document.body.classList.add('jd-bookshelf-home-active');
     rootHome.layout = attachHomeLayout(chat, rootHome.root);
@@ -965,18 +1042,42 @@ export function onEnable() {
     const subscribe = (type, fn) => { if (type) { context.eventSource.on(type, fn); listeners.push([type, fn]); } };
     const ready = () => { installControls(); if (!observer && document.getElementById('chat')) { observer = new MutationObserver(scheduleHome); observer.observe(document.getElementById('chat'), { childList: true }); } scheduleHome(); };
     subscribe(types.APP_READY, () => {
+        lastActiveEntityKey = activeEntityKeyFromContext();
         ready();
         for (const shell of shells) if (!shell.viewTouched) { Object.assign(shell, shelfView(settings())); shell.draw(); }
     });
-    subscribe(types.CHAT_CHANGED, () => { dismissedHome = false; invalidateArchiveData(); document.querySelectorAll('.jd-shelf-dialog[open]').forEach(d => d.close()); scheduleHome(); });
-    for (const type of [types.CHARACTER_EDITED, types.CHARACTER_DELETED, types.CHARACTER_DUPLICATED, types.CHARACTERS_IMPORTED, types.CHAT_DELETED, types.GROUP_CHAT_DELETED, types.CHAT_RENAMED, types.CHAT_CREATED]) subscribe(type, () => {
+    subscribe(types.CHAT_CHANGED, () => {
+        dismissedHome = false;
+        const nextKey = activeEntityKeyFromContext();
+        invalidateEntityArchive(lastActiveEntityKey);
+        invalidateEntityArchive(nextKey);
+        lastActiveEntityKey = nextKey;
+        document.querySelectorAll('.jd-shelf-dialog[open]').forEach(d => d.close());
+        scheduleHome();
+    });
+    for (const type of [types.CHARACTER_EDITED, types.CHARACTERS_IMPORTED]) subscribe(type, () => {
+        invalidateArchiveData({ bumpAvatars: true }); for (const shell of shells) shell.draw(); scheduleHome();
+    });
+    for (const type of [types.CHARACTER_DELETED, types.CHARACTER_DUPLICATED, types.CHAT_DELETED, types.GROUP_CHAT_DELETED, types.CHAT_RENAMED, types.CHAT_CREATED]) subscribe(type, () => {
         invalidateArchiveData(); for (const shell of shells) shell.draw(); scheduleHome();
     });
+    onExternalGalleryUpdated = event => {
+        const bump = Boolean(event?.detail?.bumpAvatars);
+        invalidateArchiveData({ bumpAvatars: bump });
+        visitCoverPicks.clear();
+        for (const shell of shells) shell.draw();
+    };
+    globalThis.addEventListener?.('yantai:bookshelf:gallery-updated', onExternalGalleryUpdated);
     // Also supports enabling after APP_READY has already fired.
+    lastActiveEntityKey = activeEntityKeyFromContext();
     ready();
 }
 export function onDisable() {
     enabledRuntime = false;
+    if (onExternalGalleryUpdated) {
+        globalThis.removeEventListener?.('yantai:bookshelf:gallery-updated', onExternalGalleryUpdated);
+        onExternalGalleryUpdated = null;
+    }
     unregisterControlModule();
     versionManager?.dispose(); versionManager = null;
     for (const request of requests) request.abort(); requests.clear();
