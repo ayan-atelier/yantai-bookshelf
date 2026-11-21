@@ -1,8 +1,17 @@
 {
   "schema": 1,
   "extension": "jingdu-bookshelf",
-  "latest": "1.5.0",
+  "latest": "1.5.1",
   "releases": [
+    {
+      "version": "1.5.1",
+      "branch": "v1.5.1",
+      "settings_schema": 1,
+      "minimum_client_version": "1.14.0",
+      "helper": "releases/yantai-bookshelf-v1.5.1-helper.json",
+      "sha256": "3551bd9d9ac4b9acc6dc120fff6247a90e817831a5195aa8c1adb31c647099d9",
+      "notes": "修复书架首页删角色卡或删空最后一份存档后跳入酒馆原生安全占位页的问题，删卡后原地留驻书架并保持滚动位置。"
+    },
     {
       "version": "1.5.0",
       "branch": "v1.5.0",

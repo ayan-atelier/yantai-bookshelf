@@ -21,6 +21,7 @@ let activeJobs = 0;
 let enabledRuntime = false;
 let opening = false;
 let dismissedHome = false;
+let preservingHomeDelete = false;
 let observer;
 let frame;
 let welcomeModule;
@@ -642,17 +643,34 @@ async function deleteCharacterFromShelf(entity, archive) {
         onClose: () => { deleteChats = !!document.querySelector('#del_char_checkbox')?.checked; },
     });
     if (!confirmed) return;
+    const wasOnHomeShelf = Boolean(rootHome?.root?.isConnected);
+    const savedHomeScrollTop = wasOnHomeShelf ? (document.getElementById('chat')?.scrollTop || 0) : null;
+    if (wasOnHomeShelf) preservingHomeDelete = true;
     setBusy(true);
     try {
         const deleted = await api.deleteCharacter(entity.id, { deleteChats });
         if (!deleted) throw new Error('角色卡未删除，可能有正在保存的聊天。');
+        preservingHomeDelete = false;
+        dismissedHome = false;
         invalidateArchiveData();
+        if (enabledRuntime && settings().enabled && !hasSelection() && !document.querySelector('#chat .welcomePanel')) {
+            await recoverFromSafetyChat({ restoreScrollTop: savedHomeScrollTop });
+        } else {
+            reconcileHome();
+            const chatEl = document.getElementById('chat');
+            if (savedHomeScrollTop != null && chatEl && rootHome?.root?.isConnected) {
+                chatEl.scrollTop = savedHomeScrollTop;
+            }
+        }
         for (const shell of shells) shell.draw();
-        archive.close();
+        if (archive?.open) archive.close();
         globalThis.toastr?.success('已删除角色卡。', '砚台 · 角色书架');
     } catch (error) {
+        preservingHomeDelete = false;
+        reconcileHome();
         report(error.message || '角色卡删除失败，请刷新后重试。');
     } finally {
+        preservingHomeDelete = false;
         setBusy(false);
     }
 }
@@ -925,14 +943,71 @@ function hasSelection() {
     const c = ctx();
     return (c.characterId !== undefined && c.characterId !== null && c.characterId !== '') || (c.groupId !== undefined && c.groupId !== null && c.groupId !== '');
 }
+function isSafetyChatState() {
+    if (hasSelection()) return false;
+    const c = ctx();
+    if (!Array.isArray(c?.chat) || c.chat.length !== 1) return false;
+    const m0 = c.chat[0];
+    if (!m0 || !m0.is_system || m0.is_user || m0.extra?.uses_system_ui) return false;
+    return m0.name === 'SillyTavern System' || String(m0.force_avatar || '').includes('five.png');
+}
+async function recoverFromSafetyChat({ restoreScrollTop = null } = {}) {
+    if (globalThis.__yantaiSafetyRecoverPromise) {
+        await globalThis.__yantaiSafetyRecoverPromise.catch(() => {});
+        reconcileHome();
+        if (restoreScrollTop != null && rootHome?.root?.isConnected) {
+            const chatEl = document.getElementById('chat');
+            if (chatEl) chatEl.scrollTop = restoreScrollTop;
+        }
+        return;
+    }
+    const c = ctx();
+    if (Array.isArray(c?.chat) && isSafetyChatState()) {
+        c.chat.splice(0, c.chat.length);
+    }
+    const chatNode = document.getElementById('chat');
+    if (chatNode) {
+        chatNode.querySelectorAll(':scope > .mes').forEach(el => el.remove());
+    }
+    const task = (async () => {
+        try {
+            const [api, welcomeMod] = await Promise.all([loadCore(), loadWelcome()]);
+            api?.setCharacterName?.('');
+            if (typeof welcomeMod?.openWelcomeScreen === 'function' && !hasSelection()) {
+                await welcomeMod.openWelcomeScreen({ force: true });
+            }
+        } catch {
+            // ignore host version mismatch
+        }
+    })();
+    globalThis.__yantaiSafetyRecoverPromise = task;
+    try {
+        await task;
+    } finally {
+        if (globalThis.__yantaiSafetyRecoverPromise === task) {
+            delete globalThis.__yantaiSafetyRecoverPromise;
+        }
+    }
+    reconcileHome();
+    if (restoreScrollTop != null && rootHome?.root?.isConnected) {
+        const chatEl = document.getElementById('chat');
+        if (chatEl) chatEl.scrollTop = restoreScrollTop;
+    }
+}
 function unmountHome() {
-    document.body.classList.remove('jd-bookshelf-home-active');
+    if (!preservingHomeDelete) {
+        document.body.classList.remove('jd-bookshelf-home-active');
+    }
     document.getElementById('chat')?.classList.remove('jd-bookshelf-home');
     if (rootHome) { rootHome.dispose(); rootHome.root.remove(); rootHome = null; }
 }
 function reconcileHome() {
     const chat = document.getElementById('chat');
     const welcome = chat?.querySelector('.welcomePanel');
+    if (!welcome && enabledRuntime && settings().enabled && !dismissedHome && !hasSelection() && isSafetyChatState()) {
+        void recoverFromSafetyChat();
+        return;
+    }
     const eligible = enabledRuntime && settings().enabled && !hasSelection() && welcome;
     const returnButton = document.getElementById('jd-bookshelf-return');
     if (eligible && dismissedHome) {
