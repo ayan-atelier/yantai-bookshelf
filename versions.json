@@ -1,8 +1,17 @@
 {
   "schema": 1,
   "extension": "jingdu-bookshelf",
-  "latest": "1.5.2",
+  "latest": "1.5.3",
   "releases": [
+    {
+      "version": "1.5.3",
+      "branch": "v1.5.3",
+      "settings_schema": 1,
+      "minimum_client_version": "1.14.0",
+      "helper": "releases/yantai-bookshelf-v1.5.3-helper.json",
+      "sha256": "b111e6221b8df58617230a58f967b01a86a81a8936cac69f769963a0acf7ca08",
+      "notes": "新增 810×1080（92% WebP）本地 IndexedDB 高清封面缓存缓解大卡库显存占用；原生兼容博客小站（QuietRoom.org）主页头图、多图轮播与点击换图。"
+    },
     {
       "version": "1.5.2",
       "branch": "v1.5.2",

@@ -3,6 +3,7 @@ import { pageSize, pageWindow, filterFolder, attachOrganizer, shelfView, remembe
 import { BOOKSHELF_VERSION, createVersionManager } from './versions.js';
 import { openVersionDialog } from './version-ui.js';
 import { attachHomeLayout } from './layout.js';
+import { createCoverThumbnailCache } from './cover-cache.js';
 
 const appRoot = new URL('../../../../', import.meta.url);
 const nativeModuleURL = import.meta.url;
@@ -42,6 +43,7 @@ let versionManager;
 let controlModule;
 let galleryVisitEpoch = 0;
 const visitCoverPicks = new Map();
+const coverThumbCache = createCoverThumbnailCache();
 let onExternalGalleryUpdated = null;
 
 function settings() {
@@ -258,7 +260,10 @@ function invalidateEntityArchive(key) {
 }
 function invalidateArchiveData({ bumpAvatars = false } = {}) {
     cardsRevision++;
-    if (bumpAvatars) avatarRevision++;
+    if (bumpAvatars) {
+        avatarRevision++;
+        coverThumbCache.invalidateAllMemoryUrls();
+    }
     counts.clear(); fileCache.clear(); detailCache.clear();
 }
 function getFiles(entity, options) {
@@ -379,16 +384,17 @@ function cover(entity, className = 'jd-cover') {
     const chosen = resolveEntityCoverChoice(entity);
     if (chosen?.src) {
         const img = element('img'); img.alt = '';
-        img.src = chosen.src;
         img.loading = 'lazy'; img.decoding = 'async'; img.style.objectPosition = chosen.crop;
-        img.addEventListener('error', () => {
-            if (chosen.fallbackSrc && img.src !== chosen.fallbackSrc) {
-                img.src = chosen.fallbackSrc;
-                return;
-            }
-            img.remove();
-        });
+        const charMeta = entity.kind === 'char' ? charFor(entity) : null;
         box.append(img);
+        coverThumbCache.attachCoverImage(img, {
+            entity,
+            chosenSrc: chosen.src,
+            fallbackSrc: chosen.fallbackSrc || '',
+            baseHref: appRoot.href,
+            avatarRevision,
+            dataSize: Number(charMeta?.data_size) || 0,
+        });
     }
     return box;
 }
@@ -1258,6 +1264,7 @@ export function onDisable() {
     unregisterControlModule();
     versionManager?.dispose(); versionManager = null;
     for (const request of requests) request.abort(); requests.clear();
+    coverThumbCache.dispose();
     invalidateArchiveData();
     const source = ctx().eventSource;
     for (const [type, fn] of listeners.splice(0)) source.removeListener ? source.removeListener(type, fn) : source.off(type, fn);

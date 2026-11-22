@@ -26,7 +26,7 @@ def release_files(root, release):
             name = PurePosixPath(entry.filename)
             if entry.is_dir():
                 continue
-            if len(name.parts) != 2 or name.parts[0] != 'jingdu-bookshelf' or name.name.startswith('.') or name.suffix not in ['.js', '.css', '.json', '.md']:
+            if len(name.parts) != 2 or name.parts[0] not in ('jingdu-bookshelf', 'yantai-bookshelf') or name.name.startswith('.') or name.suffix not in ['.js', '.css', '.json', '.md']:
                 raise ValueError('Unsafe or unexpected ZIP member: ' + entry.filename)
             if name.name in files or entry.file_size > 4_000_000:
                 raise ValueError('Duplicate or excessive ZIP member')

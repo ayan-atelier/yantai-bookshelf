@@ -30,9 +30,19 @@
 #chat.jd-bookshelf-home{padding:0!important;overflow-y:auto;scroll-padding-top:calc(12px + var(--jd-home-inset-top,0px));scroll-padding-bottom:calc(12px + var(--jd-home-inset-bottom,0px));}
 #chat.jd-bookshelf-home>.jd-bookshelf{flex:0 0 auto;}
 /* Replace only native welcome content, not arbitrary children / popup hosts.
-   Keep the native composer and extension entry points available. */
+   Keep #mesid=0 as a 0-height invisible width ruler so QuietRoom.org's header
+   banner & carousel (.hp-image-banner) automatically align and stay interactive on home. */
 body.jd-bookshelf-home-active #chat.jd-bookshelf-home>.welcomePanel,
-body.jd-bookshelf-home-active #chat.jd-bookshelf-home>.mes:is([type="welcome"],[type="welcome_prompt"],[type="assistant_message"],[type="assistant_note"]){display:none!important;}
+body.jd-bookshelf-home-active #chat.jd-bookshelf-home>.mes:not([mesid="0"]):is([type="welcome"],[type="welcome_prompt"],[type="assistant_message"],[type="assistant_note"]){display:none!important;}
+body.jd-bookshelf-home-active #chat.jd-bookshelf-home>.mes[mesid="0"]:is([type="welcome"],[type="welcome_prompt"],[type="assistant_message"],[type="assistant_note"]){
+  display:block!important;visibility:hidden!important;opacity:0!important;pointer-events:none!important;
+  order:-2!important;flex:0 0 0px!important;width:min(calc(100% - 40px),1380px)!important;max-width:calc(100% - 40px)!important;
+  height:0!important;min-height:0!important;max-height:0!important;margin:0 auto!important;padding:0!important;border:0!important;overflow:hidden!important;
+}
+body.jd-bookshelf-home-active #chat.jd-bookshelf-home>.hp-image-banner{
+  order:-1!important;margin-top:calc(14px + var(--jd-home-inset-top,0px))!important;margin-bottom:2px!important;
+}
+body.jd-bookshelf-home-active #chat.jd-bookshelf-home:has(>.hp-image-banner)>.jd-bookshelf{padding-top:10px!important;}
 #jd-bookshelf-return{flex:0 0 auto;width:auto;white-space:nowrap;text-indent:0;text-shadow:none;}
 #jd-bookshelf-return:focus-visible{outline:2px solid currentColor;outline-offset:2px;}
 .jd-bookshelf .jd-text-button,.jd-shelf-dialog .jd-text-button{padding:5px 0;min-height:30px;border:0;background:none;font-size:12px;line-height:1.5;color:var(--shelf-muted);}
