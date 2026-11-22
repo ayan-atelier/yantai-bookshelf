@@ -1,13 +1,8 @@
 # 砚台 · 角色书架
 
-V1.5.3 · 创意与测试：阿砚 · 代码：Codex
+V1.5.2 · 创意与测试：阿砚 · 代码：Codex
 
 让酒馆首页以 3:4 竖版角色卡展示，提供轻量角色分类与存档管理。颜色、字体跟随当前酒馆主题。原名「静读 · 角色书架」。
-
-## V1.5.3 更新
-
-- 新增大卡库 810×1080（92% WebP）本地 IndexedDB 高清封面缓存：针对几百至上千张角色卡的大体积原始 PNG，闲时双路限流编码并优先命中毫秒级缩略图缓存，更换封面或编辑卡片时自动精准刷新，大幅降低手机端与平板显存占用防闪退。
-- 原生兼容「QuietRoom.org（博客小站）」原版主题与脚本：书架首页保留 0 高度隐形宽度标尺与头图排序，无需改动博客小站代码即可正常显示主页头图、多图轮播并支持直接点击头图换图。
 
 ## V1.5.2 更新
 
@@ -58,7 +53,7 @@ https://github.com/ayan-atelier/yantai-bookshelf
 
 ### 酒馆助手版
 
-下载 [yantai-bookshelf-v1.5.3-helper.json](https://github.com/ayan-atelier/yantai-bookshelf/raw/refs/heads/main/releases/yantai-bookshelf-v1.5.3-helper.json)，导入酒馆助手的全局脚本库，开启全局脚本总开关和这份书架脚本，再刷新酒馆。
+下载 [yantai-bookshelf-v1.5.2-helper.json](https://github.com/ayan-atelier/yantai-bookshelf/raw/refs/heads/main/releases/yantai-bookshelf-v1.5.2-helper.json)，导入酒馆助手的全局脚本库，开启全局脚本总开关和这份书架脚本，再刷新酒馆。
 
 V1.4.1 及之后的助手版可在“版本与更新”中更新，需要助手提供 `getScriptTrees` / `updateScriptTreesWith` 接口（4.8.0 起）。更早的书架或不支持在线更新的助手版本可重新导入新版 JSON。
 
