@@ -22,6 +22,8 @@ let enabledRuntime = false;
 let opening = false;
 let dismissedHome = false;
 let preservingHomeDelete = false;
+let pendingHomeScrollAnchor = null;
+let releaseHomeScrollLock = null;
 let observer;
 let frame;
 let welcomeModule;
@@ -430,6 +432,7 @@ async function safeAction(action) {
 // Always call the native selectors, which own saving, metadata, lore bindings,
 // regex activation and CHAT_CHANGED notifications used by other extensions.
 async function openNative(entity, filename = null) {
+    releaseHomeScrollLock?.();
     await switchNativeChat({ context: ctx, entity, filename, api: await loadCore(), groups: await loadGroups(), openAssistant: async () => (await loadWelcome()).openPermanentAssistantChat() });
     document.querySelectorAll('.jd-shelf-dialog[open]').forEach(d => d.close());
     unmountHome(); invalidateEntityArchive(entity.key);
@@ -454,6 +457,7 @@ async function newChat(entity) {
     // Selecting a never-played character already creates its first greeting.
     // Reuse that new story instead of saving it and making a second empty file.
     if (!files.length && !selectedEntityMatches(ctx(), entity)) return openNative(entity);
+    releaseHomeScrollLock?.();
     await createNativeChat({ context: ctx, entity, api: await loadCore(), groups: await loadGroups(), openAssistant: async () => (await loadWelcome()).openPermanentAssistantChat() });
     document.querySelectorAll('.jd-shelf-dialog[open]').forEach(d => d.close());
     unmountHome(); invalidateEntityArchive(entity.key);
@@ -472,9 +476,95 @@ function updateCounts(key, count) {
     }
 }
 
+function captureHomeScrollAnchor() {
+    const chatEl = document.getElementById('chat');
+    const docEl = document.scrollingElement || document.documentElement;
+    return {
+        chatTop: chatEl ? Math.max(0, chatEl.scrollTop || 0) : 0,
+        docTop: docEl ? Math.max(0, docEl.scrollTop || 0) : Math.max(0, globalThis.scrollY || 0),
+    };
+}
+
+function applyHomeScrollAnchor(anchor) {
+    if (!anchor) return;
+    const chatEl = document.getElementById('chat');
+    if (chatEl && rootHome?.root?.isConnected && Math.abs((chatEl.scrollTop || 0) - anchor.chatTop) > 1) {
+        chatEl.scrollTop = anchor.chatTop;
+    }
+    const docEl = document.scrollingElement || document.documentElement;
+    if (docEl && Math.abs((docEl.scrollTop || 0) - anchor.docTop) > 1) {
+        docEl.scrollTop = anchor.docTop;
+    }
+}
+
+function lockHomeScrollPosition(anchor, durationMs = 1100) {
+    releaseHomeScrollLock?.();
+    if (!anchor) return;
+    pendingHomeScrollAnchor = anchor;
+    applyHomeScrollAnchor(anchor);
+
+    const timers = [];
+    const frames = [];
+    const chatEl = document.getElementById('chat');
+    let stopped = false;
+
+    const enforce = () => {
+        if (stopped || !enabledRuntime || hasSelection()) return;
+        applyHomeScrollAnchor(anchor);
+    };
+    const cancel = () => {
+        if (stopped) return;
+        stopped = true;
+        if (pendingHomeScrollAnchor === anchor) pendingHomeScrollAnchor = null;
+        for (const id of timers) clearTimeout(id);
+        for (const id of frames) cancelAnimationFrame(id);
+        chatEl?.removeEventListener('scroll', onScroll);
+        globalThis.removeEventListener?.('scroll', onScroll);
+        for (const evt of ['wheel', 'touchstart', 'touchmove', 'pointerdown']) {
+            globalThis.removeEventListener?.(evt, onUserInteract, { capture: true });
+        }
+        globalThis.removeEventListener?.('keydown', onKeyInteract, true);
+        if (releaseHomeScrollLock === cancel) releaseHomeScrollLock = null;
+    };
+    const onScroll = () => {
+        if (stopped) return;
+        enforce();
+    };
+    const onUserInteract = () => cancel();
+    const onKeyInteract = event => {
+        if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) {
+            cancel();
+        }
+    };
+
+    chatEl?.addEventListener('scroll', onScroll, { passive: true });
+    globalThis.addEventListener?.('scroll', onScroll, { passive: true });
+    for (const evt of ['wheel', 'touchstart', 'touchmove', 'pointerdown']) {
+        globalThis.addEventListener?.(evt, onUserInteract, { capture: true, passive: true });
+    }
+    globalThis.addEventListener?.('keydown', onKeyInteract, true);
+
+    if (typeof requestAnimationFrame === 'function') {
+        const f1 = requestAnimationFrame(() => {
+            enforce();
+            const f2 = requestAnimationFrame(enforce);
+            frames.push(f2);
+        });
+        frames.push(f1);
+    }
+    for (const wait of [0, 40, 120, 240, 420, 700, durationMs]) {
+        timers.push(setTimeout(() => {
+            enforce();
+            if (wait >= durationMs) cancel();
+        }, wait));
+    }
+    releaseHomeScrollLock = cancel;
+}
+
 function showArchives(entity, cached) {
     const existing = [...document.querySelectorAll('.jd-archives-dialog[open]')].find(d => d.dataset.entity === entity.key);
     if (existing) { existing.querySelector('.jd-dialog-head button')?.focus(); return; }
+    const openedHomeAnchor = rootHome?.root?.isConnected ? captureHomeScrollAnchor() : null;
     const { modal, body, notice } = dialog(entity.name);
     modal.classList.add('jd-archives-dialog'); modal.dataset.entity = entity.key;
     const revision = cardsRevision;
@@ -558,7 +648,7 @@ function showArchives(entity, cached) {
         });
     }));
     if (entity.kind === 'char') {
-        const remove = button('', 'jd-icon-button jd-delete-character', () => deleteCharacterFromShelf(entity, modal), `删除角色卡「${entity.name}」`);
+        const remove = button('', 'jd-icon-button jd-delete-character', () => deleteCharacterFromShelf(entity, modal, openedHomeAnchor), `删除角色卡「${entity.name}」`);
         const icon = element('i', 'fa-solid fa-trash-can'); icon.setAttribute('aria-hidden', 'true');
         remove.append(icon); remove.disabled = opening; foot.append(remove);
     }
@@ -621,8 +711,9 @@ function confirmDelete(entity, row, archive, current) {
     const actions = element('div', 'jd-delete-actions'); actions.append(cancel, commit); body.append(actions); cancel.focus();
 }
 
-async function deleteCharacterFromShelf(entity, archive) {
+async function deleteCharacterFromShelf(entity, archive, initialHomeAnchor = null) {
     if (opening || entity.kind !== 'char' || !archive?.open) return;
+    const preConfirmAnchor = rootHome?.root?.isConnected ? captureHomeScrollAnchor() : initialHomeAnchor;
     let api, popupModule, templateModule;
     try {
         [api, popupModule, templateModule] = await Promise.all([
@@ -643,9 +734,16 @@ async function deleteCharacterFromShelf(entity, archive) {
         onClose: () => { deleteChats = !!document.querySelector('#del_char_checkbox')?.checked; },
     });
     if (!confirmed) return;
-    const wasOnHomeShelf = Boolean(rootHome?.root?.isConnected);
-    const savedHomeScrollTop = wasOnHomeShelf ? (document.getElementById('chat')?.scrollTop || 0) : null;
+    const wasOnHomeShelf = Boolean(rootHome?.root?.isConnected || preConfirmAnchor);
+    const liveAnchor = rootHome?.root?.isConnected ? captureHomeScrollAnchor() : null;
+    const savedHomeAnchor = wasOnHomeShelf
+        ? {
+            chatTop: Math.max(liveAnchor?.chatTop ?? 0, preConfirmAnchor?.chatTop ?? 0, initialHomeAnchor?.chatTop ?? 0),
+            docTop: Math.max(liveAnchor?.docTop ?? 0, preConfirmAnchor?.docTop ?? 0, initialHomeAnchor?.docTop ?? 0),
+        }
+        : { chatTop: 0, docTop: 0 };
     if (wasOnHomeShelf) preservingHomeDelete = true;
+    pendingHomeScrollAnchor = savedHomeAnchor;
     setBusy(true);
     try {
         const deleted = await api.deleteCharacter(entity.id, { deleteChats });
@@ -654,19 +752,22 @@ async function deleteCharacterFromShelf(entity, archive) {
         dismissedHome = false;
         invalidateArchiveData();
         if (enabledRuntime && settings().enabled && !hasSelection() && !document.querySelector('#chat .welcomePanel')) {
-            await recoverFromSafetyChat({ restoreScrollTop: savedHomeScrollTop });
+            await recoverFromSafetyChat({ restoreAnchor: savedHomeAnchor });
         } else {
             reconcileHome();
-            const chatEl = document.getElementById('chat');
-            if (savedHomeScrollTop != null && chatEl && rootHome?.root?.isConnected) {
-                chatEl.scrollTop = savedHomeScrollTop;
-            }
         }
         for (const shell of shells) shell.draw();
         if (archive?.open) archive.close();
+        if (enabledRuntime && settings().enabled && !hasSelection() && rootHome?.root?.isConnected) {
+            rootHome.root.querySelector('.jd-search')?.blur?.();
+            lockHomeScrollPosition(savedHomeAnchor);
+        } else {
+            pendingHomeScrollAnchor = null;
+        }
         globalThis.toastr?.success('已删除角色卡。', '砚台 · 角色书架');
     } catch (error) {
         preservingHomeDelete = false;
+        pendingHomeScrollAnchor = null;
         reconcileHome();
         report(error.message || '角色卡删除失败，请刷新后重试。');
     } finally {
@@ -852,6 +953,7 @@ function createShelf(isHome = false) {
     info.append(tally, addCharacter, sortStatus, shell.organizer.organize, refresh);
     const pageLabel = element('span', 'jd-page-label'); pageLabel.setAttribute('aria-live', 'polite');
     const turnPage = delta => {
+        releaseHomeScrollLock?.();
         shell.page += delta; shell.draw(); if (!shell.query) shell.remember();
         if (isHome) document.getElementById('chat').scrollTop = 0;
         else root.scrollIntoView({ block: 'start', behavior: 'instant' });
@@ -951,14 +1053,12 @@ function isSafetyChatState() {
     if (!m0 || !m0.is_system || m0.is_user || m0.extra?.uses_system_ui) return false;
     return m0.name === 'SillyTavern System' || String(m0.force_avatar || '').includes('five.png');
 }
-async function recoverFromSafetyChat({ restoreScrollTop = null } = {}) {
+async function recoverFromSafetyChat({ restoreAnchor = null } = {}) {
+    const targetAnchor = restoreAnchor || pendingHomeScrollAnchor || { chatTop: 0, docTop: 0 };
     if (globalThis.__yantaiSafetyRecoverPromise) {
         await globalThis.__yantaiSafetyRecoverPromise.catch(() => {});
         reconcileHome();
-        if (restoreScrollTop != null && rootHome?.root?.isConnected) {
-            const chatEl = document.getElementById('chat');
-            if (chatEl) chatEl.scrollTop = restoreScrollTop;
-        }
+        if (rootHome?.root?.isConnected) lockHomeScrollPosition(targetAnchor);
         return;
     }
     const c = ctx();
@@ -989,9 +1089,8 @@ async function recoverFromSafetyChat({ restoreScrollTop = null } = {}) {
         }
     }
     reconcileHome();
-    if (restoreScrollTop != null && rootHome?.root?.isConnected) {
-        const chatEl = document.getElementById('chat');
-        if (chatEl) chatEl.scrollTop = restoreScrollTop;
+    if (rootHome?.root?.isConnected) {
+        lockHomeScrollPosition(targetAnchor);
     }
 }
 function unmountHome() {
@@ -1030,11 +1129,12 @@ function reconcileHome() {
     unmountHome(); rootHome = createShelf(true); chat.prepend(rootHome.root);
     chat.classList.add('jd-bookshelf-home'); document.body.classList.add('jd-bookshelf-home-active');
     rootHome.layout = attachHomeLayout(chat, rootHome.root);
-    chat.scrollTop = 0;
+    chat.scrollTop = pendingHomeScrollAnchor ? pendingHomeScrollAnchor.chatTop : 0;
 }
 function scheduleHome() { if (frame || !enabledRuntime) return; frame = requestAnimationFrame(() => { frame = null; reconcileHome(); }); }
 
 function restoreHome() {
+    releaseHomeScrollLock?.();
     dismissedHome = false;
     reconcileHome();
     if (rootHome?.root.isConnected) {
@@ -1149,6 +1249,8 @@ export function onEnable() {
 }
 export function onDisable() {
     enabledRuntime = false;
+    releaseHomeScrollLock?.();
+    pendingHomeScrollAnchor = null;
     if (onExternalGalleryUpdated) {
         globalThis.removeEventListener?.('yantai:bookshelf:gallery-updated', onExternalGalleryUpdated);
         onExternalGalleryUpdated = null;

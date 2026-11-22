@@ -1,8 +1,12 @@
 # 砚台 · 角色书架
 
-V1.5.1 · 创意与测试：阿砚 · 代码：Codex
+V1.5.2 · 创意与测试：阿砚 · 代码：Codex
 
 让酒馆首页以 3:4 竖版角色卡展示，提供轻量角色分类与存档管理。颜色、字体跟随当前酒馆主题。原名「静读 · 角色书架」。
+
+## V1.5.2 更新
+
+- 修复在书架首页删除角色卡后，被酒馆原生延迟贴底滚动（`printMessages` / `scrollOnMediaLoad`）拉到书架最底部的问题：删卡前锚定原滚动位置，删卡恢复后拦截异步贴底跳转（任意手动滚轮/触屏操作即刻接管），无需再手动拉回。
 
 ## V1.5.1 更新
 
@@ -49,7 +53,7 @@ https://github.com/ayan-atelier/yantai-bookshelf
 
 ### 酒馆助手版
 
-下载 [yantai-bookshelf-v1.5.0-helper.json](https://github.com/ayan-atelier/yantai-bookshelf/raw/refs/heads/main/releases/yantai-bookshelf-v1.5.0-helper.json)，导入酒馆助手的全局脚本库，开启全局脚本总开关和这份书架脚本，再刷新酒馆。
+下载 [yantai-bookshelf-v1.5.2-helper.json](https://github.com/ayan-atelier/yantai-bookshelf/raw/refs/heads/main/releases/yantai-bookshelf-v1.5.2-helper.json)，导入酒馆助手的全局脚本库，开启全局脚本总开关和这份书架脚本，再刷新酒馆。
 
 V1.4.1 及之后的助手版可在“版本与更新”中更新，需要助手提供 `getScriptTrees` / `updateScriptTreesWith` 接口（4.8.0 起）。更早的书架或不支持在线更新的助手版本可重新导入新版 JSON。
 

@@ -1,8 +1,17 @@
 {
   "schema": 1,
   "extension": "jingdu-bookshelf",
-  "latest": "1.5.1",
+  "latest": "1.5.2",
   "releases": [
+    {
+      "version": "1.5.2",
+      "branch": "v1.5.2",
+      "settings_schema": 1,
+      "minimum_client_version": "1.14.0",
+      "helper": "releases/yantai-bookshelf-v1.5.2-helper.json",
+      "sha256": "86ea31185a168d6ed4b13a9f5d6f73b3c71443750b783595c8338a1b232ad33a",
+      "notes": "修复在书架首页删除角色卡后被酒馆延迟贴底滚动拉到页面最底部的问题，删卡后原地留驻并稳锁浏览滚动位置。"
+    },
     {
       "version": "1.5.1",
       "branch": "v1.5.1",
