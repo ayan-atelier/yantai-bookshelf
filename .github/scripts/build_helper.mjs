@@ -87,10 +87,10 @@ const oldEmbedded = extractEmbedded(old);
 const embedded = buildEmbedded(oldEmbedded);
 const next = {
     ...old,
-    name: '砚台 · 角色书架 V1.5.3（酒馆助手版）',
-    info: `# 砚台 · 角色书架 V1.5.3\n创意与测试：阿砚 · 代码：Codex\n新增 810×1080 高清 WebP 封面缓存缓解百千张大卡库显存压力，原生兼容博客小站（QuietRoom.org）主页头图、轮播与点击换图；保留删卡原地留驻防贴底跳动、多封面图库轮换、微透线性图标、首页导卡、标签筛选与存档管理。\n导入酒馆助手全局脚本库，只启用一份书架。\n支持角色展示、轻量分类、存档管理与浏览位置记忆。\n在书架设置的“版本与更新”里手动检查、更新或退回兼容版本。\n发布仓库：https://github.com/ayan-atelier/yantai-bookshelf\n完整代码随包提供；启动时不检查或下载更新，不调用模型。\n`,
+    name: '砚台 · 角色书架 V1.5.4（酒馆助手版）',
+    info: `# 砚台 · 角色书架 V1.5.4\n创意与测试：阿砚 · 代码：Codex\n书架首页自动隐藏原生底部“未选择任何角色”禁用输入栏（点右上角「原版首页」或进卡立即恢复）；保留 810×1080 高清 WebP 封面缓存、原生兼容博客小站（QuietRoom.org）头图轮播、删卡原地留驻、多封面图库轮换、首页导卡、标签筛选与存档管理。\n导入酒馆助手全局脚本库，只启用一份书架。\n支持角色展示、轻量分类、存档管理与浏览位置记忆。\n在书架设置的“版本与更新”里手动检查、更新或退回兼容版本。\n发布仓库：https://github.com/ayan-atelier/yantai-bookshelf\n完整代码随包提供；启动时不检查或下载更新，不调用模型。\n`,
 };
 next.content = rebuildContent(old.content, embedded);
-next.content = next.content.replace('砚台 · 角色书架 V1.4.3 · 酒馆助手版', '砚台 · 角色书架 V1.5.3 · 酒馆助手版');
-write('releases/yantai-bookshelf-v1.5.3-helper.json', JSON.stringify(next, null, 2) + '\n');
-console.log(`built releases/yantai-bookshelf-v1.5.3-helper.json (${next.content.length} chars)`);
+next.content = next.content.replace('砚台 · 角色书架 V1.4.3 · 酒馆助手版', '砚台 · 角色书架 V1.5.4 · 酒馆助手版');
+write('releases/yantai-bookshelf-v1.5.4-helper.json', JSON.stringify(next, null, 2) + '\n');
+console.log(`built releases/yantai-bookshelf-v1.5.4-helper.json (${next.content.length} chars)`);

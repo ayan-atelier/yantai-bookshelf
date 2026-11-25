@@ -1,8 +1,17 @@
 {
   "schema": 1,
   "extension": "jingdu-bookshelf",
-  "latest": "1.5.3",
+  "latest": "1.5.4",
   "releases": [
+    {
+      "version": "1.5.4",
+      "branch": "v1.5.4",
+      "settings_schema": 1,
+      "minimum_client_version": "1.14.0",
+      "helper": "releases/yantai-bookshelf-v1.5.4-helper.json",
+      "sha256": "87c281b120bea3b851703229d802c74516a6e089d772dc307b8f3aa93450c438",
+      "notes": "书架首页自动隐藏酒馆原生底部「未选择任何角色」禁用输入栏，让默认主题与各类美化都能全幅清爽浏览角色卡；点右上角「原版首页」或进卡立即恢复。"
+    },
     {
       "version": "1.5.3",
       "branch": "v1.5.3",
