@@ -43,10 +43,10 @@ body.jd-bookshelf-home-active #chat.jd-bookshelf-home>.hp-image-banner{
   order:-1!important;margin-top:calc(14px + var(--jd-home-inset-top,0px))!important;margin-bottom:2px!important;
 }
 body.jd-bookshelf-home-active #chat.jd-bookshelf-home:has(>.hp-image-banner)>.jd-bookshelf{padding-top:10px!important;}
-/* Hide the disabled "no character selected" bottom composer on bookshelf home;
-   clicking "原版首页" or entering any chat immediately restores #form_sheld. */
-body.jd-bookshelf-home-active #form_sheld,
-body.jd-bookshelf-home-active #form_sheld#form_sheld{display:none!important;}
+/* Hide the disabled "no character selected" bottom composer on bookshelf home when enabled;
+   unchecking "首页隐藏底部输入栏" (or st-mate showing home composer) immediately restores #form_sheld. */
+body.jd-bookshelf-home-active.jd-bookshelf-hide-composer:not(.stm-show-home-composer) #form_sheld,
+body.jd-bookshelf-home-active.jd-bookshelf-hide-composer:not(.stm-show-home-composer) #form_sheld#form_sheld{display:none!important;}
 #jd-bookshelf-return{flex:0 0 auto;width:auto;white-space:nowrap;text-indent:0;text-shadow:none;}
 #jd-bookshelf-return:focus-visible{outline:2px solid currentColor;outline-offset:2px;}
 .jd-bookshelf .jd-text-button,.jd-shelf-dialog .jd-text-button{padding:5px 0;min-height:30px;border:0;background:none;font-size:12px;line-height:1.5;color:var(--shelf-muted);}

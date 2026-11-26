@@ -51,6 +51,7 @@ function settings() {
     if (!store[MODULE] || typeof store[MODULE] !== 'object') store[MODULE] = {};
     const s = store[MODULE];
     if (typeof s.enabled !== 'boolean') s.enabled = true;
+    if (typeof s.hideHomeComposer !== 'boolean') s.hideHomeComposer = true;
     for (const key of ['favorites', 'aliases', 'crops', 'galleries']) if (!s[key] || typeof s[key] !== 'object' || Array.isArray(s[key])) s[key] = {};
     if (!Array.isArray(s.pinned)) s.pinned = [];
     s.sort = normalizeSort(s.sort);
@@ -1099,9 +1100,14 @@ async function recoverFromSafetyChat({ restoreAnchor = null } = {}) {
         lockHomeScrollPosition(targetAnchor);
     }
 }
+function syncHomeComposerClass(active = Boolean(rootHome?.root?.isConnected)) {
+    const hide = Boolean(active && settings().hideHomeComposer !== false);
+    document.body.classList.toggle('jd-bookshelf-hide-composer', hide);
+}
 function unmountHome() {
     if (!preservingHomeDelete) {
         document.body.classList.remove('jd-bookshelf-home-active');
+        document.body.classList.remove('jd-bookshelf-hide-composer');
     }
     document.getElementById('chat')?.classList.remove('jd-bookshelf-home');
     if (rootHome) { rootHome.dispose(); rootHome.root.remove(); rootHome = null; }
@@ -1129,11 +1135,12 @@ function reconcileHome() {
         if (entry.parentElement !== shortcuts) shortcuts.append(entry);
     } else returnButton?.remove();
     if (!eligible || dismissedHome) { unmountHome(); return; }
-    if (rootHome?.root.isConnected) return;
+    if (rootHome?.root.isConnected) { syncHomeComposerClass(true); return; }
     galleryVisitEpoch += 1;
     visitCoverPicks.clear();
     unmountHome(); rootHome = createShelf(true); chat.prepend(rootHome.root);
     chat.classList.add('jd-bookshelf-home'); document.body.classList.add('jd-bookshelf-home-active');
+    syncHomeComposerClass(true);
     rootHome.layout = attachHomeLayout(chat, rootHome.root);
     chat.scrollTop = pendingHomeScrollAnchor ? pendingHomeScrollAnchor.chatTop : 0;
 }
@@ -1177,8 +1184,10 @@ function updateEnabledUi(value = settings().enabled) {
         entry.hidden = !enabled;
         entry.setAttribute('aria-disabled', String(!enabled));
     }
-    const check = document.querySelector('#jd-bookshelf-settings input[type="checkbox"]');
+    const check = document.getElementById('jd-bookshelf-enabled-check') || document.querySelector('#jd-bookshelf-settings input[type="checkbox"]');
     if (check) check.checked = enabled;
+    const hideCheck = document.getElementById('jd-bookshelf-hide-composer-check');
+    if (hideCheck) hideCheck.checked = settings().hideHomeComposer !== false;
 }
 function installControls() {
     if (!document.getElementById('jd-bookshelf-open')) {
@@ -1206,10 +1215,13 @@ function installControls() {
         });
         const content = element('div', 'inline-drawer-content'); content.id = 'jd-bookshelf-settings-content';
         content.append(element('small', 'jd-install-status', `已加载 · V${BOOKSHELF_VERSION} · 配色跟随当前酒馆主题`));
-        const label = element('label', 'checkbox_label'); const check = element('input'); check.type = 'checkbox'; check.checked = settings().enabled;
+        const label = element('label', 'checkbox_label'); const check = element('input'); check.type = 'checkbox'; check.id = 'jd-bookshelf-enabled-check'; check.checked = settings().enabled;
         check.addEventListener('change', () => { settings().enabled = check.checked; dismissedHome = false; save(); updateEnabledUi(check.checked); scheduleHome(); globalThis.dispatchEvent?.(new CustomEvent('yantai:control:updated')); });
         label.append(check, element('span', '', '启用角色书架功能（首页显示）'));
-        content.append(label, button('打开书架', 'menu_button', openShelf), element('small', '', '封面右上角：图钉置顶、星号收藏、裁切调整封面。置顶按点击先后排列，其余可切换排序；点封面进入存档列表，右上角可新建聊天。'));
+        const hideLabel = element('label', 'checkbox_label'); const hideCheck = element('input'); hideCheck.type = 'checkbox'; hideCheck.id = 'jd-bookshelf-hide-composer-check'; hideCheck.checked = settings().hideHomeComposer !== false;
+        hideCheck.addEventListener('change', () => { settings().hideHomeComposer = hideCheck.checked; save(); syncHomeComposerClass(); });
+        hideLabel.append(hideCheck, element('span', '', '首页隐藏底部输入栏（取消勾选可在首页使用魔法棒）'));
+        content.append(label, hideLabel, button('打开书架', 'menu_button', openShelf), element('small', '', '封面右上角：图钉置顶、星号收藏、裁切调整封面。置顶按点击先后排列，其余可切换排序；点封面进入存档列表，右上角可新建聊天。'));
         content.append(button('版本与更新', 'menu_button jd-version-open', showVersionManager));
         drawer.append(header, content); panel.append(drawer); host.append(panel);
     }

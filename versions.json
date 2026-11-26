@@ -1,8 +1,17 @@
 {
   "schema": 1,
   "extension": "jingdu-bookshelf",
-  "latest": "1.5.4",
+  "latest": "1.5.5",
   "releases": [
+    {
+      "version": "1.5.5",
+      "branch": "v1.5.5",
+      "settings_schema": 1,
+      "minimum_client_version": "1.14.0",
+      "helper": "releases/yantai-bookshelf-v1.5.5-helper.json",
+      "sha256": "fe75d1f4dde1cd1eadea6b0b902df5da5635b8ffd7b3c1bb39d4a98eb7a9fc41",
+      "notes": "新增「首页隐藏底部输入栏」独立开关（默认隐藏保持首页清爽，取消勾选即可在书架首页直接使用底部魔法棒菜单或快捷指令）。"
+    },
     {
       "version": "1.5.4",
       "branch": "v1.5.4",
